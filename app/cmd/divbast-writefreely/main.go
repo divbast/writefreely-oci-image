@@ -67,6 +67,12 @@ func run(args []string, o *bootstrap.Options, stderr io.Writer) int {
 	if len(args) == 0 {
 		return usageError(stderr, usage)
 	}
+	// serve, health and version take nothing more. The ENTRYPOINT is
+	// serve, so docker run <image> version arrives as "serve version", and
+	// must not start a server, or bootstrap a trial, in its place
+	if args[0] != "user" && len(args) > 1 {
+		return usageError(stderr, usage)
+	}
 	ctx := context.Background()
 	switch args[0] {
 	case "serve":

@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/writefreely/writefreely"
+
 	"github.com/divbast/writefreely-oci-image/app/internal/bootstrap"
 	"github.com/divbast/writefreely-oci-image/app/internal/conf"
 )
@@ -37,9 +39,16 @@ func TestRun(t *testing.T) {
 		wantOut  string   // a substring of stdout; empty wants none
 		wantErr  []string // substrings of stderr; none wants it empty
 	}{
-		{name: "version", args: []string{"version"}, wantOut: "WriteFreely 0.17.3"},
+		// Upstream's own version string, whichever release is linked: the
+		// image's build sets it, and Renovate moves the release
+		{name: "version", args: []string{"version"}, wantOut: writefreely.FormatVersion() + "\n"},
 		{name: "none", wantCode: 2, wantErr: []string{"usage: divbast-writefreely"}},
 		{name: "unknown", args: []string{"nope"}, wantCode: 2, wantErr: []string{"usage: divbast-writefreely"}},
+		// The ENTRYPOINT is serve, so docker run <image> version runs
+		// "serve version": it must not start a server, or bootstrap a trial
+		{name: "serve with more", args: []string{"serve", "version"}, wantCode: 2, wantErr: []string{"usage: divbast-writefreely"}},
+		{name: "version with more", args: []string{"version", "x"}, wantCode: 2, wantErr: []string{"usage: divbast-writefreely"}},
+		{name: "health with more", args: []string{"health", "x"}, wantCode: 2, wantErr: []string{"usage: divbast-writefreely"}},
 		{name: "user alone", args: []string{"user"}, wantCode: 2, wantErr: []string{"usage: divbast-writefreely user"}},
 		{name: "user unknown", args: []string{"user", "nope", "x"}, wantCode: 2, wantErr: []string{"usage: divbast-writefreely user"}},
 		{name: "user create without credentials", args: []string{"user", "create"}, wantCode: 2, wantErr: []string{"usage: divbast-writefreely user"}},
