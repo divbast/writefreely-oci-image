@@ -309,8 +309,9 @@ pulls them. If the attestation or its verification fails, `:<version>` and
 
 A daily stall check, `.github/workflows/stall.yml`, which calls divbast/ci's
 shared one, fails, and GitHub emails you, when a Renovate pull request has
-been open more than 14 days or red or pending for more than a day, or when
-Renovate has not succeeded in a day.
+been open more than 14 days or red or pending for more than a day, when
+Renovate has not succeeded in a day, or when two daily runs should have
+published and did not.
 
 [divbast/infra](https://github.com/divbast/infra) manages the `renovate`
 environment, the App's client ID and private key in it,
