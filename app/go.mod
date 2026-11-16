@@ -28,7 +28,7 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fatih/color v1.19.0 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
-	github.com/go-fed/httpsig v0.1.1-0.20200204213531-0ef28562fabe // indirect
+	github.com/go-fed/httpsig v1.1.0 // indirect
 	github.com/go-sql-driver/mysql v1.8.1 // indirect
 	github.com/gobuffalo/envy v1.9.0 // indirect
 	github.com/gofrs/uuid v3.3.0+incompatible // indirect
