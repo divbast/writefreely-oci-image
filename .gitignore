@@ -5,3 +5,5 @@
 .ci/
 .agents/
 .superpowers/
+# The binary go build writes into app/, from there or a one-package ./...
+/app/divbast-writefreely

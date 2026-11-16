@@ -60,7 +60,11 @@ ci-checkout:
 
 # Every lint gate. Needs a running Docker daemon, for docker build --check
 lint:
-    {{ just_executable() }} ci-fresh actions-check workflow-audit actionlint shell-lint go-lint go-test reuse-lint app-lint
+    {{ just_executable() }} ci-fresh actions-check workflow-audit actionlint shell-lint go-lint go-test app-go reuse-lint app-lint
+
+# ci's Go gates and tests, in the app's own module, app/
+app-go:
+    {{ just_executable() }} --justfile {{ justfile() }} --working-directory app ci_dir={{ justfile_directory() }}/.ci go-lint go-test
 
 # Every gate. Run before committing
 ci:
