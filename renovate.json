@@ -1,4 +1,55 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>divbast/renovate-config", "github>divbast/renovate-config:app"]
+  "extends": ["github>divbast/renovate-config", "github>divbast/renovate-config:app"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "ARG WRITEFREELY_VERSION, the bare version the image is tagged with. The dockerfile manager only reads an ARG that a FROM expands, and this one feeds the image's tag and the build's check that app/go.mod links the same release. Upstream tags releases as v0.17.3.",
+      "managerFilePatterns": ["/^Containerfile$/"],
+      "matchStrings": ["ARG WRITEFREELY_VERSION=(?<currentValue>\\S+)"],
+      "depNameTemplate": "writefreely/writefreely",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.+)$",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "ARG WRITEFREELY_TAG and the ARG WRITEFREELY_TARBALL_SHA256 beneath it, captured together so one PR moves both: the release's amd64 tarball, which the prose stage takes the editor's bundle from. The release publishes no checksum file; github-release-attachments computes the new tarball's sha256 from the release. Its digest lookup reads releases/tags/<currentValue>, so the value is the tag as written, v and all. The two ARGs must stay adjacent and in this order.",
+      "managerFilePatterns": ["/^Containerfile$/"],
+      "matchStrings": ["ARG WRITEFREELY_TAG=(?<currentValue>v\\S+)\\nARG WRITEFREELY_TARBALL_SHA256=(?<currentDigest>[0-9a-f]{64})"],
+      "depNameTemplate": "writefreely/writefreely",
+      "datasourceTemplate": "github-release-attachments",
+      "versioningTemplate": "semver"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Every Go module moves, the ones WriteFreely needs as well as the ones it names: Renovate leaves indirect modules alone unless told.",
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["indirect"],
+      "enabled": true
+    },
+    {
+      "description": "The other Go modules' minor, patch and digest updates in one PR, which tidies app/go.mod and go.sum as it goes. WriteFreely moves in its own PR, and divbast/ci never through gomod; the go line is no module, and keeps the preset's Dashboard approval. Majors arrive one by one, and automerge.",
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["require", "indirect"],
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "matchDepNames": ["!github.com/writefreely/writefreely", "!github.com/divbast/ci"],
+      "groupName": "Go modules"
+    },
+    {
+      "description": "go mod tidy runs only in the app's module. The root module's replace names ./.ci, which Renovate's checkout never has, so tidying it would fail every update there.",
+      "matchManagers": ["gomod"],
+      "matchFileNames": ["app/go.mod"],
+      "postUpdateOptions": ["gomodTidy"]
+    },
+    {
+      "description": "A WriteFreely release in one PR: the version and the tarball's tag and sha256 in the Containerfile, and app/go.mod and go.sum, since the build fails unless they name the same release. It merges once every check passes, like every other update here, and majors are no exception: the acceptance suite, not the size of the bump, holds a release back.",
+      "matchDepNames": ["writefreely/writefreely", "github.com/writefreely/writefreely"],
+      "groupName": "writefreely",
+      "labels": ["writefreely"],
+      "commitMessagePrefix": "writefreely:",
+      "automerge": true
+    }
+  ]
 }

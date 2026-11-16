@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: BSD-2-Clause
+// SPDX-License-Identifier: AGPL-3.0-only
 // SPDX-FileCopyrightText: 2026 Aryan Ameri <github@aryan.ameri.coffee>
 
 package acceptance
@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/divbast/ci/contract"
+	"github.com/divbast/ci/harness"
 )
 
 // What the image's contract says of every container here.
@@ -17,48 +18,89 @@ const (
 	// gets exactly this, so no check passes on more room than the
 	// contract grants.
 	tmpfsSize = "16m"
-	// appPort serves the page, and healthPort only /healthz.
+	// appPort serves WriteFreely, and healthPort only /healthz.
 	appPort    = 8080
 	healthPort = 8081
 )
 
-// binary is the app, which the image's ENTRYPOINT, HEALTHCHECK and the
-// contract's Exec all run.
-const binary = "/usr/local/bin/template"
+// binary is divbast's one binary, which the image's ENTRYPOINT,
+// HEALTHCHECK and the contract's Exec all run.
+const binary = "/usr/local/bin/divbast-writefreely"
 
-// serverArgv is PID 1's argv: the image's ENTRYPOINT, since nothing runs
-// before the server.
+// serverArgv is PID 1's argv: the image's ENTRYPOINT, which bootstraps
+// in-process and then serves.
 var serverArgv = []string{binary, "serve"}
+
+// The configurations the contract runs in beside the trial's.
+const (
+	configuredINI = "[app]\nsingle_user = false\nhost = http://localhost:8080\n[database]\ntype = sqlite3\n"
+	gopherINI     = "[app]\nsingle_user = true\nhost = http://localhost:8080\n[server]\ngopher_port = 7070\n"
+	gopherPort    = 7070
+	// contractPassword is the admin's in the contract's scenarios.
+	contractPassword = "contract-pass-word"
+)
 
 // healthCmd is the shipped health probe, as the image's HEALTHCHECK runs
 // it and a Podman user passes it with --health-cmd.
 var healthCmd = []string{binary, "health"}
 
 // TestContract runs divbast's confinement contract against the image, on a
-// network with no route out: no capability, no new privileges, a seccomp
-// filter, a read-only root and no writable mount that can execute, uid
-// 65532, the server as PID 1, no shell and no package manager, two
-// listeners, no egress, the HEALTHCHECK and the health port.
+// network with no route out, once for each configuration it supports: no
+// capability, no new privileges, a seccomp filter, a read-only root and no
+// writable mount that can execute, uid 65532, the server as PID 1, no shell
+// and no package manager, its listeners alone, no egress, the HEALTHCHECK
+// and the health port.
 func TestContract(t *testing.T) {
 	t.Parallel()
-	_, image := underTest(t)
-	contract.Run(t, &contract.Config{
-		Image:      image,
-		AppPort:    appPort,
-		HealthPort: healthPort,
-		TmpfsSize:  tmpfsSize,
-		PID1:       serverArgv,
-		Exec:       []string{binary, "version"},
-		HealthCmd:  healthCmd,
-		Healthcheck: contract.Healthcheck{
-			Test:        slices.Concat([]string{"CMD"}, healthCmd),
-			Interval:    30 * time.Second,
-			Timeout:     10 * time.Second,
-			StartPeriod: 60 * time.Second,
-			Retries:     3,
-		},
-		// The health port's root, and a path an app made from the template
-		// with PHP would serve: neither may answer there
-		HealthOnly404: []string{"/", "/index.php"},
-	})
+	e, image := underTest(t)
+	for _, sc := range []struct {
+		name   string
+		env    map[string]string
+		tcp    []int
+		mounts func(tb testing.TB) []harness.Mount
+	}{
+		// No configuration, an empty volume: the trial
+		{name: "trial", mounts: func(tb testing.TB) []harness.Mount {
+			tb.Helper()
+			return []harness.Mount{dataVolume(tb, e)}
+		}},
+		// A multi-user config.ini mounted read-only, and the admin from
+		// the secret
+		{name: "configured", env: map[string]string{adminUser: "ada"}, mounts: func(tb testing.TB) []harness.Mount {
+			tb.Helper()
+			return []harness.Mount{dataVolume(tb, e), configMount(tb, configuredINI, false), secretMount(tb, contractPassword)}
+		}},
+		// A public instance with Gopher on, which listens past the two
+		// ports
+		{name: "gopher", env: map[string]string{adminUser: "ada"}, tcp: []int{gopherPort}, mounts: func(tb testing.TB) []harness.Mount {
+			tb.Helper()
+			return []harness.Mount{dataVolume(tb, e), configMount(tb, gopherINI, false), secretMount(tb, contractPassword)}
+		}},
+	} {
+		t.Run(sc.name, func(t *testing.T) {
+			t.Parallel()
+			contract.Run(t, &contract.Config{
+				Image:      image,
+				Scenario:   sc.name,
+				AppPort:    appPort,
+				HealthPort: healthPort,
+				TmpfsSize:  tmpfsSize,
+				PID1:       serverArgv,
+				Exec:       []string{binary, "version"},
+				HealthCmd:  healthCmd,
+				Healthcheck: contract.Healthcheck{
+					Test:        slices.Concat([]string{"CMD"}, healthCmd),
+					Interval:    30 * time.Second,
+					Timeout:     10 * time.Second,
+					StartPeriod: 60 * time.Second,
+					Retries:     3,
+				},
+				Env:           sc.env,
+				Mounts:        sc.mounts,
+				ExtraTCPPorts: sc.tcp,
+				// WriteFreely's pages: neither may answer on the health port
+				HealthOnly404: []string{"/", "/login"},
+			})
+		})
+	}
 }

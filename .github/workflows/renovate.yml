@@ -1,9 +1,9 @@
-# SPDX-License-Identifier: BSD-2-Clause
+# SPDX-License-Identifier: AGPL-3.0-only
 # SPDX-FileCopyrightText: 2026 Aryan Ameri <github@aryan.ameri.coffee>
 
 # Renovate for this repository, through divbast/ci's renovate.yml. Renovate
 # merges its own pull requests only while the repository variable
-# OCI_IMAGE_TEMPLATE_AUTOMERGE is `enabled`, compared without regard to
+# WRITEFREELY_AUTOMERGE is `enabled`, compared without regard to
 # case. Unset, empty or anything else turns automerge off from the next run.
 
 name: renovate
@@ -43,7 +43,7 @@ jobs:
     name: renovate
     uses: divbast/ci/.github/workflows/renovate.yml@fdf31bbe82f14e314a269e820fe3c2a18b85aa2b # v3.0.0
     with:
-      automerge: ${{ vars.OCI_IMAGE_TEMPLATE_AUTOMERGE == 'enabled' }}
+      automerge: ${{ vars.WRITEFREELY_AUTOMERGE == 'enabled' }}
     # The App's key lives in this repository's `renovate` environment, and a
     # called workflow sees an environment secret only when its caller passes
     # it by name.

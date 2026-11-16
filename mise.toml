@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: BSD-2-Clause
+# SPDX-License-Identifier: AGPL-3.0-only
 # SPDX-FileCopyrightText: 2026 Aryan Ameri <github@aryan.ameri.coffee>
 
 [tools]
@@ -23,8 +23,7 @@
 # The toolchain is the one pinned above, never one go.mod's toolchain line
 # would download
 GOTOOLCHAIN = "local"
-# A PHP app made from the template keeps Composer's vendor/ at the module
-# root, and with a require in go.mod Go would take it for a Go vendor
-# directory and refuse to build. readonly is the default outside vendor
-# mode, and still refuses to edit go.mod.
-GOFLAGS = "-mod=readonly"
+# readonly refuses to edit go.mod. The tags are the image's: WriteFreely's
+# SQLite exists only under sqlite, and netgo and osusergo keep the static
+# binary off libc's resolvers, so lint and tests build what ships.
+GOFLAGS = "-mod=readonly -tags=sqlite,netgo,osusergo"
