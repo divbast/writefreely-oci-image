@@ -1,10 +1,10 @@
-# SPDX-License-Identifier: BSD-2-Clause
+# SPDX-License-Identifier: AGPL-3.0-only
 # SPDX-FileCopyrightText: 2026 Aryan Ameri <github@aryan.ameri.coffee>
 
 set shell := ["mise", "exec", "--", "bash", "-euo", "pipefail", "-c"]
 
 # The image's name, without its registry: everything below is named from it
-APP := "oci-image-template"
+APP := "writefreely"
 
 # What divbast/ci's app recipes act on: the engine, the image the build
 # writes and the acceptance suite runs, where archive writes it and scan
@@ -27,14 +27,12 @@ import? '.ci/just/app.just'
 default:
     @just --list
 
-# Fetch divbast/ci at the commit the workflows pin, then install the toolchain,
-# and PHPStan for the PHP layer
+# Fetch divbast/ci at the commit the workflows pin, then install the toolchain
 setup: ci-checkout
     #!/usr/bin/env bash
     # Not through the mise exec shell: this is what installs what it runs
     set -euo pipefail
     mise install
-    composer install --working-dir=layers/php
 
 # Fetch divbast/ci at the commit the workflows pin, into .ci, and nothing else
 ci-checkout:
@@ -63,7 +61,6 @@ ci-checkout:
 # Every lint gate. Needs a running Docker daemon, for docker build --check
 lint:
     {{ just_executable() }} ci-fresh actions-check workflow-audit actionlint shell-lint go-lint go-test reuse-lint app-lint
-    layers/php/vendor/bin/phpstan analyse -c layers/php/phpstan.neon --no-progress
 
 # Every gate. Run before committing
 ci:

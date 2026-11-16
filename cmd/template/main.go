@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: BSD-2-Clause
+// SPDX-License-Identifier: AGPL-3.0-only
 // SPDX-FileCopyrightText: 2026 Aryan Ameri <github@aryan.ameri.coffee>
 
 // Command template is the template's app, and the image's PID 1.
@@ -35,7 +35,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/divbast/oci-image-template/internal/server"
+	"github.com/divbast/writefreely-oci-image/internal/server"
 )
 
 // version is set at build time, with -ldflags "-X main.version=…".

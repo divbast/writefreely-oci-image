@@ -1,9 +1,9 @@
-# SPDX-License-Identifier: BSD-2-Clause
+# SPDX-License-Identifier: AGPL-3.0-only
 # SPDX-FileCopyrightText: 2026 Aryan Ameri <github@aryan.ameri.coffee>
 
 # The app's own version, which tags the image: app-publish.yml reads it from
 # this line, by the name build.yml gives as version-arg
-ARG TEMPLATE_VERSION=0.2.0
+ARG WRITEFREELY_VERSION=0.17.3
 # The runtime: static-debian13, since the binary is static, with nothing in
 # it but CA certificates, time zones and /etc/passwd. CI verifies its
 # signature by the distroless project before anything is built.
@@ -11,7 +11,7 @@ ARG RUNTIME_IMAGE=gcr.io/distroless/static-debian13:nonroot@sha256:aafe993665bf6
 
 # The newest stable Go, by digest. Only the binary leaves this stage.
 FROM golang:1.27.4-trixie@sha256:b54b2639de8c1bfe538ec5ffc45f29b1932235ac5f6d63c059853646677112d9 AS build
-ARG TEMPLATE_VERSION
+ARG WRITEFREELY_VERSION
 WORKDIR /src
 # go.mod's replace names ./.ci, which the build context leaves out: the app
 # imports nothing from divbast/ci, so Go never looks for it
@@ -19,19 +19,19 @@ COPY go.mod ./
 COPY cmd/ cmd/
 COPY internal/ internal/
 RUN CGO_ENABLED=0 GOFLAGS=-mod=readonly GOTOOLCHAIN=local \
-    go build -trimpath -ldflags="-s -w -X main.version=${TEMPLATE_VERSION}" -o /out/template ./cmd/template
+    go build -trimpath -ldflags="-s -w -X main.version=${WRITEFREELY_VERSION}" -o /out/template ./cmd/template
 
 FROM ${RUNTIME_IMAGE}
-ARG TEMPLATE_VERSION
+ARG WRITEFREELY_VERSION
 
 # Root-owned, and never written
 COPY --from=build /out/template /usr/local/bin/template
 
-LABEL org.opencontainers.image.source="https://github.com/divbast/oci-image-template" \
-    org.opencontainers.image.url="https://github.com/divbast/oci-image-template" \
-    org.opencontainers.image.title="oci-image-template" \
-    org.opencontainers.image.version="${TEMPLATE_VERSION}" \
-    org.opencontainers.image.licenses="BSD-2-Clause"
+LABEL org.opencontainers.image.source="https://github.com/divbast/writefreely-oci-image" \
+    org.opencontainers.image.url="https://github.com/divbast/writefreely-oci-image" \
+    org.opencontainers.image.title="WriteFreely" \
+    org.opencontainers.image.version="${WRITEFREELY_VERSION}" \
+    org.opencontainers.image.licenses="AGPL-3.0-only"
 
 EXPOSE 8080 8081
 # Exec form: the shell form would need /bin/sh, which the image lacks.

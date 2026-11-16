@@ -1,7 +1,7 @@
-// SPDX-License-Identifier: BSD-2-Clause
+// SPDX-License-Identifier: AGPL-3.0-only
 // SPDX-FileCopyrightText: 2026 Aryan Ameri <github@aryan.ameri.coffee>
 
-module github.com/divbast/oci-image-template
+module github.com/divbast/writefreely-oci-image
 
 go 1.27.4
 
