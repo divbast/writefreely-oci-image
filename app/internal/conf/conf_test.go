@@ -17,6 +17,12 @@ import (
 
 const file = "/etc/writefreely/config.ini"
 
+// withHost is an otherwise empty configuration with a usable host: every
+// configuration Enforce accepts has one.
+func withHost() *config.Config {
+	return &config.Config{App: config.AppCfg{Host: "https://blog.example.com"}}
+}
+
 // testLayout is a layout under a fresh temporary directory.
 func testLayout(t *testing.T) conf.Layout {
 	t.Helper()
@@ -27,7 +33,7 @@ func testLayout(t *testing.T) conf.Layout {
 func TestEnforceFillsUnset(t *testing.T) {
 	t.Parallel()
 	l := conf.Image
-	cfg := &config.Config{}
+	cfg := withHost()
 	if err := conf.Enforce(cfg, file, l); err != nil {
 		t.Fatalf("Enforce(empty) = %v, want nil", err)
 	}
@@ -77,10 +83,14 @@ func TestEnforce(t *testing.T) {
 		{"gopher on health", func(c *config.Config) { c.Server.GopherPort = 8081 }, "[server] gopher_port = 8081: the image's own port"},
 		{"gopher high", func(c *config.Config) { c.Server.GopherPort = 7070 }, ""},
 		{"mysql keeps its filename", func(c *config.Config) { c.Database.Type, c.Database.FileName = "mysql", "x" }, ""},
+		{"no host", func(c *config.Config) { c.App.Host = "" }, file + ": [app] host must be the blog's public URL with its scheme, such as https://blog.example.com"},
+		{"host as config.Load leaves a bare name", func(c *config.Config) { c.App.Host = "://" }, "[app] host must be the blog's public URL"},
+		{"host without a scheme", func(c *config.Config) { c.App.Host = "blog.example.com" }, "[app] host must be the blog's public URL"},
+		{"host with a port", func(c *config.Config) { c.App.Host = "http://localhost:8080" }, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			cfg := &config.Config{}
+			cfg := withHost()
 			tc.set(cfg)
 			before := *cfg
 			err := conf.Enforce(cfg, file, conf.Image)

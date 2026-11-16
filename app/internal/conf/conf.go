@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -85,10 +86,16 @@ func Working(l Layout, mounted string) (path string, isMounted bool, err error) 
 }
 
 // Enforce fills each unset image-owned key with the image's value, and
-// refuses any other value, and anything else the image cannot honour: one
-// error per conflict, each naming file and what to change.
+// refuses any other value, a host that is not a URL, and anything else the
+// image cannot honour: one error per conflict, each naming file and what
+// to change.
 func Enforce(cfg *config.Config, file string, l Layout) error {
 	var errs []error
+	// config.Load turns a host without a scheme, or none, into "://", and
+	// a save writes that back, after which the file never loads again
+	if u, err := url.Parse(cfg.App.Host); err != nil || u.Scheme == "" || u.Host == "" {
+		errs = append(errs, fmt.Errorf("%s: [app] host must be the blog's public URL with its scheme, such as https://blog.example.com", file))
+	}
 	s := &cfg.Server
 	own(&errs, file, "server", "bind", &s.Bind, "0.0.0.0")
 	own(&errs, file, "server", "port", &s.Port, AppPort)
