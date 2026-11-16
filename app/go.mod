@@ -5,7 +5,13 @@ module github.com/divbast/writefreely-oci-image/app
 
 go 1.27.4
 
-require github.com/writefreely/writefreely v0.17.3
+require (
+	// config.Save's own serialiser, so the admin panel's saves write the
+	// file as WriteFreely does, without the chmod that fails on a mounted
+	// file the container does not own
+	github.com/go-ini/ini v1.67.0
+	github.com/writefreely/writefreely v0.17.3
+)
 
 require (
 	code.as/core/socks v1.0.0 // indirect
@@ -21,7 +27,6 @@ require (
 	github.com/fatih/color v1.19.0 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/go-fed/httpsig v0.1.1-0.20200204213531-0ef28562fabe // indirect
-	github.com/go-ini/ini v1.67.0 // indirect
 	github.com/go-sql-driver/mysql v1.8.1 // indirect
 	github.com/gobuffalo/envy v1.9.0 // indirect
 	github.com/gofrs/uuid v3.3.0+incompatible // indirect
