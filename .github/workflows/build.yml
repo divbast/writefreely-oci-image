@@ -78,17 +78,11 @@ jobs:
       && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     uses: divbast/ci/.github/workflows/app-publish.yml@fdf31bbe82f14e314a269e820fe3c2a18b85aa2b # v3.0.0
     with:
-      image: ghcr.io/divbast/oci-image-template
+      image: ghcr.io/divbast/writefreely
       version-arg: WRITEFREELY_VERSION
-      description: A minimal divbast app, one PHP page on FrankenPHP. Zero capabilities, read-only root, non-root, no shell
-      # Decides against image, then pushes, attests and verifies in a
-      # registry the job starts for itself, so nothing reaches ghcr.io. An
-      # app made from this repository sets image to its own and removes
-      # this line, and divbast/ci v2 fails the job in any other repository
-      # that keeps it: README.md's "Making a new app", step 8.
-      rehearse: true
-    # Everything app-publish.yml's job asks for, rehearsing or not: a called
-    # job that asks for more than its caller grants fails.
+      description: WriteFreely, federated blogging. Zero capabilities, no new privileges, read-only root, non-root, no shell
+    # Everything app-publish.yml's job asks for: a called job that asks for
+    # more than its caller grants fails.
     permissions:
       contents: read
       packages: write # read ghcr.io to decide, and push there once it publishes
