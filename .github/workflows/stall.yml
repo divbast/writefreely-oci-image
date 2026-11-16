@@ -28,10 +28,7 @@ jobs:
     name: stall
     uses: divbast/ci/.github/workflows/stall.yml@49ce84b2928d5b04faf37608f088c0c8fc49a803 # v3.1.0
     with:
-      # No slots yet: they count the slots that should have published, and
-      # would fail on an image not yet public. They go on once the first
-      # image is public.
-      checks: '["open","stuck","renovate"]'
+      published: ghcr.io/divbast/writefreely:latest
     # Everything stall.yml's job asks for, slots or not: a called job that
     # asks for more than its caller grants fails.
     permissions:
