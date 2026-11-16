@@ -109,7 +109,8 @@ naming what to change.
   that API fails its bump PR's build, red by design
 - **The working file** is `/etc/writefreely/config.ini` when mounted, and
   otherwise `/data/config.ini`, written once from upstream's
-  `config.New()` on SQLite
+  `config.New()` on SQLite. A mounted `/etc/writefreely` without
+  `config.ini` is refused, never taken for the trial
 - **The image owns** `bind`, `port`, the three asset dirs,
   `keys_parent_dir` and the SQLite `filename`: an unset key takes the
   image's value, and any other value is refused, every conflict in one

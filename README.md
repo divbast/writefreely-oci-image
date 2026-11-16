@@ -125,7 +125,9 @@ directory; a newline at its end is not part of it. The admin is created
 only while the database has no users, so the name and the password have
 no effect after the first start, and are needed only for it. Give both or
 neither: one without the other is refused, and so is a mounted
-`config.ini` with no users and no admin to create.
+`config.ini` with no users and no admin to create. A mounted
+`/etc/writefreely` with no `config.ini` in it is refused too, rather than
+taken for the trial.
 
 `config.ini` is WriteFreely's own, as
 [its documentation](https://writefreely.org/docs/latest/admin/config)

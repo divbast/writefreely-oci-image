@@ -29,7 +29,7 @@ func healthy(t *testing.T) (db *sql.DB, keysDir string) {
 	t.Helper()
 	dir := t.TempDir()
 	l := conf.Layout{Data: dir, Assets: filepath.Join(dir, "assets")}
-	file, _, err := conf.Working(l, filepath.Join(dir, "absent.ini"))
+	file, _, err := conf.Working(l, filepath.Join(dir, "etc", "config.ini"))
 	if err != nil {
 		t.Fatal(err)
 	}

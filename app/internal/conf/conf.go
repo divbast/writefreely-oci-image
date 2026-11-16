@@ -64,11 +64,22 @@ func Defaults(l Layout) *config.Config {
 }
 
 // Working returns the working file: mounted when it exists, and otherwise
-// l.DataConfig(), written from Defaults when absent.
+// l.DataConfig(), written from Defaults when absent. mounted's directory
+// existing without it, as a directory mounted with a misnamed file, is
+// refused: the image does not create that directory, so an operator
+// mounted it, and taking the trial instead would ignore their
+// configuration without a word.
 func Working(l Layout, mounted string) (path string, isMounted bool, err error) {
 	switch _, err := os.Stat(mounted); {
 	case err == nil:
 		return mounted, true, nil
+	case !errors.Is(err, fs.ErrNotExist):
+		return "", false, err
+	}
+	dir := filepath.Dir(mounted)
+	switch _, err := os.Stat(dir); {
+	case err == nil:
+		return "", false, fmt.Errorf("%s holds no %s: mount the directory with your %s in it, or mount nothing there", dir, filepath.Base(mounted), filepath.Base(mounted))
 	case !errors.Is(err, fs.ErrNotExist):
 		return "", false, err
 	}

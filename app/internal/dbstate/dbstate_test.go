@@ -20,7 +20,7 @@ import (
 func TestReadState(t *testing.T) { //nolint:paralleltest // WriteFreely's package-level state
 	dir := t.TempDir()
 	l := conf.Layout{Data: dir, Assets: filepath.Join(dir, "assets")}
-	file, _, err := conf.Working(l, filepath.Join(dir, "absent.ini"))
+	file, _, err := conf.Working(l, filepath.Join(dir, "etc", "config.ini"))
 	if err != nil {
 		t.Fatal(err)
 	}

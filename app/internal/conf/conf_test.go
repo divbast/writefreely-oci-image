@@ -173,7 +173,7 @@ func TestWorkingCreates(t *testing.T) {
 	if err := os.MkdirAll(l.Data, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	path, isMounted, err := conf.Working(l, filepath.Join(t.TempDir(), "absent.ini"))
+	path, isMounted, err := conf.Working(l, filepath.Join(t.TempDir(), "etc", "config.ini"))
 	if err != nil || path != l.DataConfig() || isMounted {
 		t.Fatalf("Working = %q, %t, %v; want %q, false, nil", path, isMounted, err, l.DataConfig())
 	}
@@ -201,7 +201,7 @@ func TestWorkingKeepsExisting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, werr := conf.Working(l, filepath.Join(t.TempDir(), "absent.ini")); werr != nil {
+	if _, _, werr := conf.Working(l, filepath.Join(t.TempDir(), "etc", "config.ini")); werr != nil {
 		t.Fatalf("Working: %v", werr)
 	}
 	after, err := os.Stat(l.DataConfig())
@@ -214,5 +214,27 @@ func TestWorkingKeepsExisting(t *testing.T) {
 	}
 	if !bytes.Equal(got, want) || !after.ModTime().Equal(before.ModTime()) {
 		t.Errorf("Working rewrote %s: now %q, mtime %v (was %v)", l.DataConfig(), got, after.ModTime(), before.ModTime())
+	}
+}
+
+// A directory mounted for the configuration with no config.ini in it,
+// such as a misnamed file, is refused rather than taken for the trial,
+// which would ignore the operator's configuration without a word.
+func TestWorkingRefusesEmptyMount(t *testing.T) {
+	t.Parallel()
+	l := testLayout(t)
+	if err := os.MkdirAll(l.Data, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(t.TempDir(), "etc")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := conf.Working(l, filepath.Join(dir, "config.ini"))
+	if err == nil || !strings.Contains(err.Error(), dir+" holds no config.ini") {
+		t.Fatalf("Working = %v, want the empty mount refused", err)
+	}
+	if _, serr := os.Stat(l.DataConfig()); !os.IsNotExist(serr) {
+		t.Errorf("Working wrote %s for an empty mount (stat: %v)", l.DataConfig(), serr)
 	}
 }

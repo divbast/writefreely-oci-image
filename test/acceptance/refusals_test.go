@@ -57,6 +57,16 @@ func TestRefusals(t *testing.T) {
 		{name: "secret without user", mounts: withSecret(configuredINI), needles: []string{"go together"}},
 		{name: "no admin", mounts: config(configuredINI), needles: []string{"no users and no admin to create"}},
 		{name: "reserved user", mounts: withSecret(configuredINI), env: map[string]string{adminUser: "admin"}, needles: []string{"invalid, reserved"}},
+		// A configuration directory mounted with a misnamed file: never
+		// taken for the trial
+		{name: "config.ini missing", mounts: func(t *testing.T) []harness.Mount {
+			t.Helper()
+			return []harness.Mount{dataVolume(t, e), {
+				Source:   hostDir(t, 0o755, map[string]string{"writefreely.ini": configuredINI}, 0o644),
+				Target:   configDir,
+				ReadOnly: true,
+			}}
+		}, needles: []string{configDir + " holds no config.ini"}},
 		// No volume on a read-only root
 		{name: "no volume", mounts: func(*testing.T) []harness.Mount { return nil }, needles: []string{"/data is not writable"}},
 	} {
