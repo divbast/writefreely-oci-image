@@ -3,7 +3,7 @@
 
 # WriteFreely's release. Renovate moves these three in one PR, with
 # app/go.mod's github.com/writefreely/writefreely; its regexes need them
-# adjacent and in this order. The version tags the image: app-publish.yml
+# adjacent and in this order, the tag directly above the sha256. The version tags the image: app-publish.yml
 # reads it from this line, by the name build.yml gives as version-arg. The
 # tag and the sha256 name the release's amd64 tarball, which the prose
 # stage takes the editor's bundle from: the release publishes no checksum
