@@ -31,6 +31,15 @@ const binary = "/usr/local/bin/divbast-writefreely"
 // in-process and then serves.
 var serverArgv = []string{binary, "serve"}
 
+// The configurations the contract runs in beside the trial's.
+const (
+	configuredINI = "[app]\nsingle_user = false\nhost = http://localhost:8080\n[database]\ntype = sqlite3\n"
+	gopherINI     = "[app]\nsingle_user = true\nhost = http://localhost:8080\n[server]\ngopher_port = 7070\n"
+	gopherPort    = 7070
+	// contractPassword is the admin's in the contract's scenarios.
+	contractPassword = "contract-pass-word"
+)
+
 // healthCmd is the shipped health probe, as the image's HEALTHCHECK runs
 // it and a Podman user passes it with --health-cmd.
 var healthCmd = []string{binary, "health"}
@@ -47,12 +56,25 @@ func TestContract(t *testing.T) {
 	for _, sc := range []struct {
 		name   string
 		env    map[string]string
+		tcp    []int
 		mounts func(tb testing.TB) []harness.Mount
 	}{
 		// No configuration, an empty volume: the trial
 		{name: "trial", mounts: func(tb testing.TB) []harness.Mount {
 			tb.Helper()
 			return []harness.Mount{dataVolume(tb, e)}
+		}},
+		// A multi-user config.ini mounted read-only, and the admin from
+		// the secret
+		{name: "configured", env: map[string]string{adminUser: "ada"}, mounts: func(tb testing.TB) []harness.Mount {
+			tb.Helper()
+			return []harness.Mount{dataVolume(tb, e), configMount(tb, configuredINI, false), secretMount(tb, contractPassword)}
+		}},
+		// A public instance with Gopher on, which listens past the two
+		// ports
+		{name: "gopher", env: map[string]string{adminUser: "ada"}, tcp: []int{gopherPort}, mounts: func(tb testing.TB) []harness.Mount {
+			tb.Helper()
+			return []harness.Mount{dataVolume(tb, e), configMount(tb, gopherINI, false), secretMount(tb, contractPassword)}
 		}},
 	} {
 		t.Run(sc.name, func(t *testing.T) {
@@ -73,8 +95,9 @@ func TestContract(t *testing.T) {
 					StartPeriod: 60 * time.Second,
 					Retries:     3,
 				},
-				Env:    sc.env,
-				Mounts: sc.mounts,
+				Env:           sc.env,
+				Mounts:        sc.mounts,
+				ExtraTCPPorts: sc.tcp,
 				// WriteFreely's pages: neither may answer on the health port
 				HealthOnly404: []string{"/", "/login"},
 			})
