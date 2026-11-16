@@ -4,11 +4,20 @@
 package acceptance
 
 import (
+	"net/http"
+	"net/http/cookiejar"
+	"net/url"
 	"os"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/divbast/ci/harness"
 )
+
+// trialMarker opens the trial's block in the log; the password is on the
+// line after it.
+const trialMarker = `created the admin "writer" with this one-time password:`
 
 // The image's mounted paths, as the README gives them.
 const (
@@ -105,4 +114,45 @@ func secretMount(tb testing.TB, password string) harness.Mount {
 		Target:   secretsDir,
 		ReadOnly: true,
 	}
+}
+
+// trialPassword is the one-time password the trial printed.
+func trialPassword(t *testing.T, s *harness.Serving) string {
+	t.Helper()
+	log, err := s.C.Logs(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, after, ok := strings.Cut(log, trialMarker+"\n")
+	line, _, _ := strings.Cut(after, "\n")
+	password := strings.TrimSpace(strings.TrimPrefix(line, "divbast-writefreely:"))
+	if !ok || password == "" {
+		t.Fatalf("no trial password in the log:\n%s", log)
+	}
+	return password
+}
+
+// webLogin logs user in through the login form, as a browser does, and
+// returns a client holding the session's cookie. WriteFreely answers a
+// login with a 302 to the user's next page, and a failed one with a 307
+// back to /login.
+func webLogin(t *testing.T, s *harness.Serving, user, pass string) *http.Client {
+	t.Helper()
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &http.Client{
+		Jar:           jar,
+		Timeout:       30 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+	form := url.Values{"alias": {user}, "pass": {pass}}.Encode()
+	resp, err := s.Do(t.Context(), client, http.MethodPost, "/auth/login",
+		http.Header{"Content-Type": {"application/x-www-form-urlencoded"}}, []byte(form))
+	harness.Answers(t, "logging in as "+user+" redirects onwards", http.StatusFound, resp, err)
+	if err == nil {
+		harness.Lacks(t, "logging in as "+user+" does not go back to the login page", "/login", resp.Header.Get("Location"))
+	}
+	return client
 }
