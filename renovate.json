@@ -38,6 +38,12 @@
       "groupName": "Go modules"
     },
     {
+      "description": "github.com/go-ini/ini ends at v1.67.0: from v1.67.1 its go.mod declares the module path gopkg.in/ini.v1, so no later release can be required by this path, and a PR proposing one could never build. WriteFreely's config package and SaveConfig both import it by this path. A later release reaches it only when upstream moves to gopkg.in/ini.v1, through the WriteFreely release PR.",
+      "matchManagers": ["gomod"],
+      "matchDepNames": ["github.com/go-ini/ini"],
+      "allowedVersions": "<1.67.1"
+    },
+    {
       "description": "go mod tidy runs only in the app's module. The root module's replace names ./.ci, which Renovate's checkout never has, so tidying it would fail every update there.",
       "matchManagers": ["gomod"],
       "matchFileNames": ["app/go.mod"],
