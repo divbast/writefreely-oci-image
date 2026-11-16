@@ -10,6 +10,8 @@ require (
 	// file as WriteFreely does, without the chmod that fails on a mounted
 	// file the container does not own
 	github.com/go-ini/ini v1.67.0
+	// InitRoutes takes a *mux.Router
+	github.com/gorilla/mux v1.8.1
 	github.com/writefreely/writefreely v0.17.3
 )
 
@@ -34,7 +36,6 @@ require (
 	github.com/gorilla/csrf v1.7.3 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/gorilla/feeds v1.1.2 // indirect
-	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/gorilla/schema v1.4.1 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/gorilla/sessions v1.3.0 // indirect
