@@ -30,7 +30,7 @@ require (
 	github.com/go-fed/httpsig v1.1.0 // indirect
 	github.com/go-sql-driver/mysql v1.10.1 // indirect
 	github.com/gobuffalo/envy v1.10.2 // indirect
-	github.com/gofrs/uuid v3.4.0+incompatible // indirect
+	github.com/gofrs/uuid v4.4.0+incompatible // indirect
 	github.com/gologme/log v1.3.0 // indirect
 	github.com/gorilla/csrf v1.7.3 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
