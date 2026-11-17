@@ -25,6 +25,7 @@ require (
 	github.com/chzyer/readline v1.5.1 // indirect
 	github.com/dchest/uniuri v1.2.0 // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
+	github.com/embedas/go-embed v1.0.0 // indirect
 	github.com/fatih/color v1.19.0 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/go-fed/httpsig v1.1.0 // indirect
@@ -72,7 +73,7 @@ require (
 	github.com/writeas/import v0.2.1 // indirect
 	github.com/writeas/monday v1.3.0 // indirect
 	github.com/writeas/openssl-go v1.0.0 // indirect
-	github.com/writeas/saturday v1.7.2-0.20200427193424-392b95a03320 // indirect
+	github.com/writeas/saturday v1.7.2-0.20210702162556-fe428f9c0648 // indirect
 	github.com/writeas/slug v1.2.0 // indirect
 	github.com/writeas/web-core v1.8.0 // indirect
 	github.com/writefreely/go-gopher v0.0.0-20260201132918-6d40a5df699c // indirect
