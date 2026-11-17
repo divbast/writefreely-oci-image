@@ -16,6 +16,7 @@ require (
 )
 
 require (
+	code.as/core/socks v1.0.0 // indirect
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/PuerkitoBio/goquery v1.14.0 // indirect
 	github.com/andybalholm/cascadia v1.3.5 // indirect
@@ -66,7 +67,7 @@ require (
 	github.com/writeas/activityserve v0.0.0-20240830214310-c451e1525408 // indirect
 	github.com/writeas/go-strip-markdown/v2 v2.1.1 // indirect
 	github.com/writeas/go-webfinger v1.1.0 // indirect
-	github.com/writeas/go-writeas/v2 v2.1.1 // indirect
+	github.com/writeas/go-writeas/v2 v2.0.2 // indirect
 	github.com/writeas/httpsig v1.0.0 // indirect
 	github.com/writeas/impart v1.1.1 // indirect
 	github.com/writeas/import v0.2.1 // indirect
@@ -85,5 +86,4 @@ require (
 	golang.org/x/text v0.44.0 // indirect
 	gopkg.in/ini.v1 v1.68.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	h12.io/socks v1.0.3 // indirect
 )
