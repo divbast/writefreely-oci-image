@@ -53,6 +53,12 @@
       "allowedVersions": "<1.67.1"
     },
     {
+      "description": "github.com/writeas/saturday stays below v2.0.0. That tag is blackfriday's, from 2017, inherited when saturday forked it, on a line that split from saturday's 193 commits before the fork point, so v2.0.0+incompatible would swap saturday for another library. Renovate also looks it up as a tag named v2.0.0+incompatible, finds none, and then makes no update at all. Without that offer, saturday, which has no release after v1.7.1 and which WriteFreely requires at a later commit, moves by commit to the head of its master branch in the Go modules group.",
+      "matchManagers": ["gomod"],
+      "matchDepNames": ["github.com/writeas/saturday"],
+      "allowedVersions": "<2.0.0"
+    },
+    {
       "description": "A WriteFreely release in one PR: the version and the tarball's tag and sha256 in the Containerfile, and app/go.mod and go.sum, since the build fails unless they name the same release. It merges once every check passes, like every other update here, and majors are no exception: the acceptance suite, not the size of the bump, holds a release back.",
       "matchDepNames": ["writefreely/writefreely", "github.com/writefreely/writefreely"],
       "groupName": "writefreely",
