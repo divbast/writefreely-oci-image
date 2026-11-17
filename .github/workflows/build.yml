@@ -40,7 +40,7 @@ concurrency:
 jobs:
   check:
     name: check
-    uses: divbast/ci/.github/workflows/app-check.yml@49ce84b2928d5b04faf37608f088c0c8fc49a803 # v3.1.0
+    uses: divbast/ci/.github/workflows/app-check.yml@3ad1e2585a3c6b1ae5fba6cefa92119784b2a678 # v3.5.0
     permissions:
       contents: read
       attestations: read # verify the attestations of the images the Containerfile builds from
@@ -76,7 +76,7 @@ jobs:
     if: >-
       github.ref == 'refs/heads/main'
       && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
-    uses: divbast/ci/.github/workflows/app-publish.yml@49ce84b2928d5b04faf37608f088c0c8fc49a803 # v3.1.0
+    uses: divbast/ci/.github/workflows/app-publish.yml@3ad1e2585a3c6b1ae5fba6cefa92119784b2a678 # v3.5.0
     with:
       image: ghcr.io/divbast/writefreely
       version-arg: WRITEFREELY_VERSION
