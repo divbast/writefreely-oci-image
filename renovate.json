@@ -31,11 +31,11 @@
       "enabled": true
     },
     {
-      "description": "Under gopkg.in a major is a separate module, gopkg.in/yaml.v3 beside gopkg.in/yaml.v2, and only WriteFreely's own code imports these indirect ones, so such a major can never apply: tidy puts the old module back. A new major reaches the image when upstream moves to it, through the WriteFreely release PR. Minor and patch releases still move.",
+      "description": "A major that changes an indirect module's path can never apply. Go names v2 and later by path, github.com/writeas/go-writeas/v3 beside .../v2 and gopkg.in/yaml.v3 beside gopkg.in/yaml.v2, so the new major is a separate module that only WriteFreely's own code could import. Tidy drops it and falls back to the lowest release of the old path the graph needs, which downgrades it: go-writeas went from v2.1.1 to v2.0.2 that way. A major keeps its path only from v0 to v1, and between +incompatible releases, which have no go.mod; those still move, as do minor and patch releases. A new major reaches the image when upstream moves to it, through the WriteFreely release PR.",
       "matchManagers": ["gomod"],
       "matchDepTypes": ["indirect"],
-      "matchDepNames": ["gopkg.in/**"],
       "matchUpdateTypes": ["major"],
+      "matchNewValue": "/^v([2-9]|[1-9][0-9]+)\\.[0-9]+\\.[0-9]+(-[^+]+)?$/",
       "enabled": false
     },
     {
@@ -51,6 +51,12 @@
       "matchManagers": ["gomod"],
       "matchDepNames": ["github.com/go-ini/ini"],
       "allowedVersions": "<1.67.1"
+    },
+    {
+      "description": "github.com/writeas/saturday stays below v2.0.0. That tag is blackfriday's, from 2017, inherited when saturday forked it, on a line that split from saturday's 193 commits before the fork point, so v2.0.0+incompatible would swap saturday for another library. Renovate also looks it up as a tag named v2.0.0+incompatible, finds none, and then makes no update at all. Without that offer, saturday, which has no release after v1.7.1 and which WriteFreely requires at a later commit, moves by commit to the head of its master branch in the Go modules group.",
+      "matchManagers": ["gomod"],
+      "matchDepNames": ["github.com/writeas/saturday"],
+      "allowedVersions": "<2.0.0"
     },
     {
       "description": "A WriteFreely release in one PR: the version and the tarball's tag and sha256 in the Containerfile, and app/go.mod and go.sum, since the build fails unless they name the same release. It merges once every check passes, like every other update here, and majors are no exception: the acceptance suite, not the size of the bump, holds a release back.",
