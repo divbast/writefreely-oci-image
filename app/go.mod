@@ -25,11 +25,11 @@ require (
 	github.com/chzyer/readline v1.5.1 // indirect
 	github.com/dchest/uniuri v1.2.0 // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
-	github.com/embedas/go-embed v1.0.0 // indirect
+	github.com/embedas/go-embed v1.1.3 // indirect
 	github.com/fatih/color v1.19.0 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/go-fed/httpsig v1.1.0 // indirect
-	github.com/go-sql-driver/mysql v1.10.1 // indirect
+	github.com/go-sql-driver/mysql v1.10.2 // indirect
 	github.com/gobuffalo/envy v1.10.2 // indirect
 	github.com/gofrs/uuid v4.4.0+incompatible // indirect
 	github.com/gologme/log v1.3.0 // indirect
