@@ -22,7 +22,7 @@ require (
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/beevik/etree v1.8.1 // indirect
 	github.com/captncraig/cors v0.0.0-20190703115713-e80254a89df1 // indirect
-	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e // indirect
+	github.com/chzyer/readline v1.5.1 // indirect
 	github.com/dchest/uniuri v1.2.0 // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
 	github.com/fatih/color v1.19.0 // indirect
