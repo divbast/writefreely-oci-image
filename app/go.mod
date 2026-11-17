@@ -84,6 +84,6 @@ require (
 	golang.org/x/sys v0.50.0 // indirect
 	golang.org/x/text v0.44.0 // indirect
 	gopkg.in/ini.v1 v1.68.0 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	h12.io/socks v1.0.3 // indirect
 )
