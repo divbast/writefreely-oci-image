@@ -31,11 +31,11 @@
       "enabled": true
     },
     {
-      "description": "Under gopkg.in a major is a separate module, gopkg.in/yaml.v3 beside gopkg.in/yaml.v2, and only WriteFreely's own code imports these indirect ones, so such a major can never apply: tidy puts the old module back. A new major reaches the image when upstream moves to it, through the WriteFreely release PR. Minor and patch releases still move.",
+      "description": "A major that changes an indirect module's path can never apply. Go names v2 and later by path, github.com/writeas/go-writeas/v3 beside .../v2 and gopkg.in/yaml.v3 beside gopkg.in/yaml.v2, so the new major is a separate module that only WriteFreely's own code could import. Tidy drops it and falls back to the lowest release of the old path the graph needs, which downgrades it: go-writeas went from v2.1.1 to v2.0.2 that way. A major keeps its path only from v0 to v1, and between +incompatible releases, which have no go.mod; those still move, as do minor and patch releases. A new major reaches the image when upstream moves to it, through the WriteFreely release PR.",
       "matchManagers": ["gomod"],
       "matchDepTypes": ["indirect"],
-      "matchDepNames": ["gopkg.in/**"],
       "matchUpdateTypes": ["major"],
+      "matchNewValue": "/^v([2-9]|[1-9][0-9]+)\\.[0-9]+\\.[0-9]+(-[^+]+)?$/",
       "enabled": false
     },
     {

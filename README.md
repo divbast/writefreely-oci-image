@@ -272,7 +272,9 @@ are:
   and `app/go.sum`, together: the build fails unless they name the same
   release.
 - The other Go modules' minor and patch releases arrive grouped in one pull
-  request, which tidies `app/go.mod`; a major arrives on its own.
+  request, which tidies `app/go.mod`; a major arrives on its own, unless it
+  moves a module only WriteFreely imports to a new path, which waits for
+  a WriteFreely release that adopts it.
 - A new Go or Node image, or a new distroless digest, arrives as a pull
   request that moves its pin, and CI verifies the distroless signature
   before it builds. `lessc` and its plugin move by pull requests of their
