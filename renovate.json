@@ -31,6 +31,14 @@
       "enabled": true
     },
     {
+      "description": "Under gopkg.in a major is a separate module, gopkg.in/yaml.v3 beside gopkg.in/yaml.v2, and only WriteFreely's own code imports these indirect ones, so such a major can never apply: tidy puts the old module back. A new major reaches the image when upstream moves to it, through the WriteFreely release PR. Minor and patch releases still move.",
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["indirect"],
+      "matchDepNames": ["gopkg.in/**"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
       "description": "The other Go modules' minor, patch and digest updates in one PR; every Go update runs go mod tidy, set above, majors included: Renovate skips tidy on a major unless gomodUpdateImportPaths is set beside it, which also rewrites this module's own imports of a module whose major changes its path. Only app/ has a go.sum for tidy: the root module, whose replace names ./.ci, has none, so Renovate updates no artifacts there. WriteFreely moves in its own PR, and divbast/ci never through gomod; the go line is no module, and keeps the preset's Dashboard approval. Majors arrive one by one, and automerge.",
       "matchManagers": ["gomod"],
       "matchDepTypes": ["require", "indirect"],
