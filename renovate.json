@@ -1,7 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["github>divbast/renovate-config", "github>divbast/renovate-config:app"],
-  "postUpdateOptions": ["gomodTidy"],
+  "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"],
   "customManagers": [
     {
       "customType": "regex",
@@ -31,7 +31,7 @@
       "enabled": true
     },
     {
-      "description": "The other Go modules' minor, patch and digest updates in one PR; every Go update runs go mod tidy, set above, and only app/ has a go.sum for it to tidy: the root module, whose replace names ./.ci, has none, so Renovate updates no artifacts there. WriteFreely moves in its own PR, and divbast/ci never through gomod; the go line is no module, and keeps the preset's Dashboard approval. Majors arrive one by one, and automerge.",
+      "description": "The other Go modules' minor, patch and digest updates in one PR; every Go update runs go mod tidy, set above, majors included: Renovate skips tidy on a major unless gomodUpdateImportPaths is set beside it, which also rewrites this module's own imports of a module whose major changes its path. Only app/ has a go.sum for tidy: the root module, whose replace names ./.ci, has none, so Renovate updates no artifacts there. WriteFreely moves in its own PR, and divbast/ci never through gomod; the go line is no module, and keeps the preset's Dashboard approval. Majors arrive one by one, and automerge.",
       "matchManagers": ["gomod"],
       "matchDepTypes": ["require", "indirect"],
       "matchUpdateTypes": ["minor", "patch", "digest"],
