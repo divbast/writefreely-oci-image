@@ -21,6 +21,16 @@
       "depNameTemplate": "writefreely/writefreely",
       "datasourceTemplate": "github-release-attachments",
       "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "ARG WRITEFREELY_FORK_VERSION, the build of divbast's fork of WriteFreely that app/go.mod's replace links, which names the image's version and its extra tag. The fork's release workflow tags each build v0.17.3-divbast.N. Semver versioning orders 0.17.3-divbast.8 above 0.17.3-divbast.7, where docker versioning would read -divbast.N as a fixed variant and offer nothing.",
+      "managerFilePatterns": ["/^Containerfile$/"],
+      "matchStrings": ["ARG WRITEFREELY_FORK_VERSION=(?<currentValue>\\S+)"],
+      "depNameTemplate": "aryonoco/writefreely",
+      "datasourceTemplate": "github-tags",
+      "extractVersionTemplate": "^v(?<version>.+)$",
+      "versioningTemplate": "semver"
     }
   ],
   "packageRules": [
@@ -68,6 +78,28 @@
       "description": "A WriteFreely release in one PR: the version and the tarball's tag and sha256 in the Containerfile, and app/go.mod and go.sum, since the build fails unless they name the same release. It merges once every check passes, like every other update here, and majors are no exception: the acceptance suite, not the size of the bump, holds a release back.",
       "matchDepNames": ["writefreely/writefreely", "github.com/writefreely/writefreely"],
       "groupName": "writefreely",
+      "labels": ["writefreely"],
+      "commitMessagePrefix": "writefreely:",
+      "automerge": true
+    },
+    {
+      "description": "WriteFreely's own releases stay where they are while the image is on divbast's fork: the Containerfile's WRITEFREELY_VERSION, WRITEFREELY_TAG and WRITEFREELY_TARBALL_SHA256, and app/go.mod's require of github.com/writefreely/writefreely, which name the release the fork builds on. A newer release reaches the image through the fork. Re-enable them when the image moves back to upstream and drops the replace, by deleting this rule: the writefreely group above then moves them again.",
+      "matchDepNames": ["writefreely/writefreely", "github.com/writefreely/writefreely"],
+      "enabled": false
+    },
+    {
+      "description": "app/go.mod's replace of github.com/aryonoco/writefreely looks up the fork's builds where WRITEFREELY_FORK_VERSION does, its git tags, so both are offered the same build. The Go module proxy lists a new tag a while after the fork's release workflow pushes it, so through the proxy the Containerfile was offered the new build and the replace the one before, in one PR whose build fails. The tags keep their v here, as go.mod writes it. Semver orders the builds, as for the ARG.",
+      "matchManagers": ["gomod"],
+      "matchDepNames": ["github.com/aryonoco/writefreely"],
+      "overrideDatasource": "github-tags",
+      "overridePackageName": "aryonoco/writefreely",
+      "versioning": "semver"
+    },
+    {
+      "description": "A build of divbast's fork in one PR: the Containerfile's WRITEFREELY_FORK_VERSION and app/go.mod's replace of github.com/aryonoco/writefreely, with go.sum, since the build fails unless they name the same build. Only tags ending in -divbast.N are offered, since the fork's own builds are the only ones the image takes: another tag in the fork's repository, such as an upstream release tag brought over by a sync, is no build of the fork. It merges once every check passes, like every other update here.",
+      "matchDepNames": ["aryonoco/writefreely", "github.com/aryonoco/writefreely"],
+      "allowedVersions": "/-divbast\\.\\d+$/",
+      "groupName": "writefreely-fork",
       "labels": ["writefreely"],
       "commitMessagePrefix": "writefreely:",
       "automerge": true

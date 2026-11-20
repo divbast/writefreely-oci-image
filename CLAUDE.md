@@ -65,7 +65,7 @@ breaking change.
 | Outbound network | **none at rest**. Federation, email, OAuth and `update_checks` connect only when used or configured |
 | Shell, package manager | **none** |
 | Processes | **one**: `divbast-writefreely serve`, as PID 1 |
-| Healthy | the shipped probe, `divbast-writefreely health`: `/healthz` on 8081 **200** and `GET /login` on 8080 **200** |
+| Healthy | the shipped probe, `divbast-writefreely health`: `/healthz` on 8081 **200** and `GET /login` on 8080 **200**, and a well-formed menu line from Gopher's root selector when Gopher is on |
 | Engine healthcheck | Docker runs it automatically. **Podman does not** — pass `--health-cmd` yourself |
 
 - **Podman never sees this image's `HEALTHCHECK`.** Its `libimage` reads a
@@ -75,18 +75,28 @@ breaking change.
   no leading `"CMD"`, which Podman before 5.8.0 re-splits into one token.
   The contract suite checks the image's `HEALTHCHECK` is that array in
   exec form, and has each engine judge the container
-- **The probe asserts two halves, and neither implies the other.**
-  `/healthz` checks the database answers, its schema is at the image's
-  migration and every key file reads, but never goes through 8080's
-  routes. `GET /login` renders for any visitor on public, private, single-
-  and multi-user instances alike, where `/` redirects on some. Each half
-  has 4 s, so the `HEALTHCHECK`'s 10 s timeout clears both. It prints
-  nothing when healthy, and a `<check>: <reason>` line per failed half
+- **The probe asserts two halves, and a third with Gopher on; none
+  implies another.** `/healthz` checks the database answers, its schema
+  is at the image's migration and every key file reads, but never goes
+  through 8080's routes. `GET /login` renders for any visitor on public,
+  private, single- and multi-user instances alike, where `/` redirects on
+  some. When the working `config.ini` sets `gopher_port` and the
+  instance is not private (a private one serves no Gopher), the probe
+  sends `127.0.0.1:<gopher_port>` the root selector and reads only the
+  answer's first line, which must be a well-formed menu line, an item or
+  the closing `.`: a single-user blog's root menu lists every post, so a
+  large blog's whole menu could outrun the read limit or the 4 s. Of
+  `config.ini` it reads those two keys alone, with go-ini, never
+  `config.Load`, which would also read every secret's `_FILE`, so a
+  secret unreadable after the start never fails a health check. Each half
+  has 4 s, so the `HEALTHCHECK`'s 15 s timeout clears all three. It
+  prints nothing when healthy, and a `<check>: <reason>` line per failed
+  half
 - **One process, and it stops when told.** The binary bootstraps
   in-process and then calls WriteFreely's own `Serve`, which handles
-  SIGTERM and SIGINT, closes the database and exits 0;
-  `TestStopsPromptly` fails on a stop that takes longer than 5 s, or any
-  other exit. No supervisor, no exec, no second long-running process
+  SIGTERM and SIGINT, drains in-flight requests for up to 8 s, closes the
+  database and exits 0; `TestStopsPromptly` fails on a stop that takes
+  longer than 5 s, or any other exit. No supervisor, no exec, no second long-running process
 - **Nothing may add a shell or a package manager to the final image**, or
   a file capability to the binary: a binary carrying one cannot be exec'd
   under `--cap-drop ALL`, and the contract's `file-capability` check runs
@@ -106,9 +116,13 @@ breaking change.
 before it serves. Every refusal exits 1 with one line per problem,
 naming what to change.
 
-- **Never patch upstream.** WriteFreely is a module dependency, used
-  through its exported API and its `Apper` seam. A release that changes
-  that API fails its bump PR's build, red by design
+- **Build from the fork, and patch nothing here.** The image builds from
+  divbast's fork of WriteFreely,
+  [`aryonoco/writefreely`, branch `divbast`](https://github.com/aryonoco/writefreely/tree/divbast),
+  a module dependency used through its exported API and its `Apper`
+  seam, until upstream has the fixes. A fix to WriteFreely itself lands
+  in the fork, never as a patch in this repository. A fork build that
+  changes that API fails its bump PR's build, red by design
 - **The working file** is `/etc/writefreely/config.ini` when mounted, and
   otherwise `/data/config.ini`, written once from upstream's
   `config.New()` on SQLite. A mounted `/etc/writefreely` without
@@ -122,19 +136,44 @@ naming what to change.
 - **Admin-panel saves go through the image's `Apper`.** `SaveConfig`
   writes as `config.Save` does, through go-ini in place, but leaves the
   file's mode alone: `config.Save`'s chmod to 0600 fails on a mounted file
-  uid 65532 can write but does not own. A read-only mount fails the save
-  visibly
+  uid 65532 can write but does not own. With a read-only mount, the
+  fork shows the settings form read-only, with a notice saying why, and
+  applies a setting only once it is written
+- **Read first, then write.** The bootstrap reads the database's state
+  and makes each of its own refusals (a database ahead of the image,
+  lost keys, a first admin it cannot create) before it writes a key
+  file, the schema or a user. A refused first start can still leave
+  `/data/config.ini`, an empty `keys/` and an empty database; the
+  checks in WriteFreely's own `Initialize`, such as both SMTP TLS
+  settings or a malformed `trusted_proxies`, refuse only after the
+  bootstrap has written all three
 - **Key files are written here**, with upstream's `key.GenerateBytes`, at
   0600, never by `GenerateKeyFiles`: it and `Initialize` each prefix the
   key paths, so both in one process double them. A key that exists is
-  never touched
+  never touched. A missing key beside a database with users is refused,
+  naming the files and saying to restore `/data/keys` with the database:
+  new keys would end every session and could not decrypt what the old
+  ones encrypted
 - **The schema**: an empty database gets `CreateSchema`, one behind the
   image's migration `Migrate`, and one ahead is refused, naming both
 - **The first admin**, only while there are no users, decided before the
-  schema is touched: the secret and `WRITEFREELY_ADMIN_USER` together;
-  with neither and no config mounted, the trial's `writer`, with a random
-  password printed once; a mounted config with no admin to create is
-  refused. `admin`, `reader` and other names are reserved upstream
+  schema is touched: `WRITEFREELY_ADMIN_USER` and a password together,
+  from one, and only one, of `WRITEFREELY_ADMIN_PASSWORD`,
+  `WRITEFREELY_ADMIN_PASSWORD_FILE` and
+  `/run/secrets/writefreely_admin_password` (a `_FILE` naming that
+  secret itself, by any path or link, counts once), at most 72 bytes,
+  bcrypt's limit, which `CreateUser` would check only after the schema; an
+  unreadable file's refusal names uid 65532 and `uid=65532` or
+  `mode=0444`. With neither and no config mounted, the trial's `writer`,
+  with a random password printed once; a mounted config with no admin to
+  create is refused. `admin`, `reader` and other names are reserved
+  upstream
+- **`user create [--admin] <name>`** reads the password at the terminal,
+  through promptui as upstream's `reset-pass` does, or one line of stdin
+  when stdin is not a terminal; `<name>:<password>` is refused, exit 2.
+  `--admin` beside an admin, or a user before there is one, is refused
+  before the password is read, in the image's own words: upstream's
+  refusal names the `<name>:<password>` form
 - **Upstream's library exits the process** on some database failures, so
   the bootstrap connects and reads the database's state itself first, and
   words those failures before upstream's code runs
@@ -142,15 +181,20 @@ naming what to change.
 ## Two Go modules
 
 - **`app/`** is divbast's binary: `github.com/divbast/writefreely-oci-image/app`,
-  requiring WriteFreely at the release, with its own `go.sum` and no
-  `replace`, so Renovate can tidy it. Its packages are `cmd/divbast-writefreely`
-  and `internal/{conf,wfapp,keys,dbstate,bootstrap,health}`
+  requiring WriteFreely at v0.17.3, the release the fork's version builds
+  on, with its own `go.sum`, and a `replace` of it with the fork's build,
+  `github.com/aryonoco/writefreely v0.17.3-divbast.N`: upstream's
+  development branch after 0.17.3, plus fixes this image relies on. Renovate's
+  `writefreely-fork` group moves that `replace` and the Containerfile's
+  `WRITEFREELY_FORK_VERSION` in one PR, tidied, and the build fails unless
+  they match. Its packages are `cmd/divbast-writefreely` and
+  `internal/{conf,wfapp,keys,dbstate,bootstrap,health}`
 - **The root module** holds the acceptance suite and requires
   `github.com/divbast/ci` through `replace … => ./.ci`, as every caller of
   ci does
 - divbast's Go imports the standard library and WriteFreely's packages.
-  Anything else carries its justification in `app/go.mod`: go-ini and
-  gorilla/mux do
+  Anything else carries its justification in `app/go.mod`: go-ini,
+  gorilla/mux, promptui and go-isatty do
 
 ## Where the shared parts live
 

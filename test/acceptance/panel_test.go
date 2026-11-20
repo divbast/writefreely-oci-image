@@ -35,8 +35,12 @@ var panelForm = url.Values{
 // WriteFreely sent it: the settings page, with the save's result in cm.
 func savePanel(t *testing.T, s *harness.Serving, client *http.Client) string {
 	t.Helper()
+	token := csrfToken(t, s, client, "/admin/settings", csrfMeta)
 	resp, err := s.Do(t.Context(), client, http.MethodPost, "/admin/update/config",
-		http.Header{"Content-Type": {"application/x-www-form-urlencoded"}}, []byte(panelForm))
+		http.Header{
+			"Content-Type": {"application/x-www-form-urlencoded"},
+			"X-Csrf-Token": {token},
+		}, []byte(panelForm))
 	harness.Answers(t, "the settings form answers 302", http.StatusFound, resp, err)
 	return resp.Header.Get("Location")
 }
@@ -104,4 +108,41 @@ func TestAdminPanelSaves(t *testing.T) {
 		after := hostFile(t, config.Source, "config.ini")
 		checks.True("the read-only config.ini is unchanged", bytes.Equal(after, []byte(configuredINI)), harness.Clip(string(after)))
 	})
+}
+
+// The site name a read-only config.ini gives, which the admin panel's save
+// of panelSiteName must leave in force.
+const (
+	lockedSiteName = "divbast locked panel"
+	lockedINI      = "[app]\nsingle_user = false\nhost = http://localhost:8080\nsite_name = " + lockedSiteName + "\n[database]\ntype = sqlite3\n"
+)
+
+// TestReadOnlyPanelLocked mounts config.ini read-only: the admin panel's
+// settings page says it can't be written, with the form's fields
+// disabled, and a save of a new site name, posted all the same, leaves the
+// old one on the home page.
+func TestReadOnlyPanelLocked(t *testing.T) {
+	t.Parallel()
+	e, image := underTest(t)
+	ctx := t.Context()
+	s := serveWF(t, e, image, map[string]string{adminUser: "ada"},
+		dataVolume(t, e), configMount(t, lockedINI, false), secretMount(t, cliAdminPassword))
+	client := webLogin(t, s, "ada", cliAdminPassword)
+
+	resp, err := s.Do(ctx, client, http.MethodGet, "/admin/settings", nil, nil)
+	harness.Answers(t, "GET /admin/settings answers 200", http.StatusOK, resp, err)
+	if err == nil {
+		harness.Contains(t, "the settings page says config.ini can't be written", "config.ini can't be written", string(resp.Body))
+		harness.Contains(t, "the settings form's fields are disabled", "<fieldset disabled", string(resp.Body))
+	}
+
+	where := savePanel(t, s, client)
+	harness.Contains(t, "the panel reports the save's result", "?cm=", where)
+	harness.Lacks(t, "the panel does not say the configuration saved", "Configuration+saved", where)
+	resp, err = s.Get(ctx, "/", nil)
+	harness.Answers(t, "GET / after the save answers 200", http.StatusOK, resp, err)
+	if err == nil {
+		harness.Contains(t, "the home page keeps the site name config.ini gives", lockedSiteName, string(resp.Body))
+		harness.Lacks(t, "the home page lacks the site name the save posted", panelSiteName, string(resp.Body))
+	}
 }

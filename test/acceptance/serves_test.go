@@ -4,8 +4,13 @@
 package acceptance
 
 import (
+	"encoding/json"
 	"net/http"
+	"os"
+	"os/exec"
+	"regexp"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/divbast/ci/harness"
@@ -57,4 +62,94 @@ func TestServes(t *testing.T) {
 	}
 
 	harness.StatusIs(t, s, "GET /healthz on the app port answers 404", http.StatusNotFound, "/healthz")
+}
+
+// forkBuild is how a build of divbast's fork of WriteFreely is versioned.
+var forkBuild = regexp.MustCompile(`^0\.17\.3-divbast\.\d+$`)
+
+// containerfileArgs returns the value of every ARG name=value line in the
+// Containerfile. The pins are read from there, where Renovate moves them,
+// since Renovate's recommended preset ignores every path under test/.
+func containerfileArgs(t *testing.T, name string) []string {
+	t.Helper()
+	b, err := os.ReadFile("../../Containerfile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := regexp.MustCompile(`(?m)^ARG `+regexp.QuoteMeta(name)+`=(\S*)$`).FindAllSubmatch(b, -1)
+	values := make([]string, 0, len(found))
+	for _, m := range found {
+		values = append(values, string(m[1]))
+	}
+	return values
+}
+
+// TestVersionNamesForkBuild checks that the image names the fork build it
+// links, the Containerfile's WRITEFREELY_FORK_VERSION, wherever it gives
+// its version: in what version prints, and in its version label.
+func TestVersionNamesForkBuild(t *testing.T) {
+	t.Parallel()
+	e, image := underTest(t)
+	ctx := t.Context()
+	checks := harness.NewChecks(t)
+
+	res, err := e.Run(ctx, t, &harness.RunSpec{
+		Image:      image,
+		Confine:    harness.Contract(tmpfsSize),
+		Network:    "none",
+		Entrypoint: []string{binary},
+		Args:       []string{"version"},
+	})
+	if err != nil {
+		t.Fatalf("running version: %v", err)
+	}
+	checks.True("version exits 0", res.Code == 0, strconv.Itoa(res.Code)+" "+string(res.Stderr))
+	printed, isFork := strings.CutPrefix(strings.TrimSpace(string(res.Stdout)), "WriteFreely ")
+	checks.True("version names a build of the fork", isFork && forkBuild.MatchString(printed), string(res.Stdout))
+
+	out, err := exec.CommandContext(ctx, e.Name(), "image", "inspect", //nolint:gosec // G204: the engine and the image are the harness's own
+		"--format", `{{index .Config.Labels "org.opencontainers.image.version"}}`, image).Output()
+	label := strings.TrimSpace(string(out))
+	checks.True("the version label names a build of the fork", err == nil && forkBuild.MatchString(label), label)
+
+	found := containerfileArgs(t, "WRITEFREELY_FORK_VERSION")
+	if len(found) != 1 {
+		checks.True("the Containerfile pins the fork build once", false, strconv.Itoa(len(found))+" ARG WRITEFREELY_FORK_VERSION lines")
+		return
+	}
+	harness.Equal(checks, "version prints the Containerfile's fork build", found[0], printed)
+	harness.Equal(checks, "the version label is the Containerfile's fork build", found[0], label)
+}
+
+// TestWriteFreelyReportsRelease checks that WriteFreely itself reports the
+// upstream release the fork builds on, the Containerfile's
+// WRITEFREELY_VERSION, and not the fork build. Its update check and its
+// release-notes links compare and name that version as an upstream
+// release, and NodeInfo, where this reads it, and the User-Agent of its
+// requests carry it.
+func TestWriteFreelyReportsRelease(t *testing.T) {
+	t.Parallel()
+	e, image := underTest(t)
+	s := serveWF(t, e, image, nil, dataVolume(t, e))
+	checks := harness.NewChecks(t)
+
+	found := containerfileArgs(t, "WRITEFREELY_VERSION")
+	if len(found) != 1 {
+		t.Fatalf("the Containerfile has %d ARG WRITEFREELY_VERSION lines, want 1", len(found))
+	}
+	resp, err := s.Get(t.Context(), "/api/nodeinfo", nil)
+	harness.Answers(t, "GET /api/nodeinfo answers 200", http.StatusOK, resp, err)
+	if err != nil {
+		return
+	}
+	var info struct {
+		Software struct {
+			Version string `json:"version"`
+		} `json:"software"`
+	}
+	if err := json.Unmarshal(resp.Body, &info); err != nil {
+		checks.True("NodeInfo is JSON", false, err.Error()+": "+harness.Clip(string(resp.Body)))
+		return
+	}
+	harness.Equal(checks, "NodeInfo's software.version is the Containerfile's WriteFreely release", found[0], info.Software.Version)
 }

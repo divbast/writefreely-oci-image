@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-ini/ini"
 	"github.com/writefreely/writefreely"
 	"github.com/writefreely/writefreely/config"
 
@@ -23,13 +24,13 @@ var _ writefreely.Apper = (*wfapp.Apper)(nil)
 // the operator's own.
 const base = "[app]\nhost = https://blog.example.com\nsite_name = x\n"
 
-// fixture writes ini to a config.ini in a fresh directory and returns its
+// fixture writes body to a config.ini in a fresh directory and returns its
 // path and a layout beside it.
-func fixture(t *testing.T, ini string) (string, conf.Layout) {
+func fixture(t *testing.T, body string) (string, conf.Layout) {
 	t.Helper()
 	dir := t.TempDir()
 	file := filepath.Join(dir, "config.ini")
-	if err := os.WriteFile(file, []byte(ini), 0o600); err != nil {
+	if err := os.WriteFile(file, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return file, conf.Layout{Data: filepath.Join(dir, "data"), Assets: filepath.Join(dir, "assets")}
@@ -125,6 +126,36 @@ func TestSaveConfigReadOnly(t *testing.T) {
 	}
 	if got := readFile(t, file); string(got) != base {
 		t.Errorf("read-only file now %q", got)
+	}
+}
+
+// A secret given through the environment runs the server but is never
+// written into the working file: an admin-panel save keeps the file's own
+// value, so the secret stays wherever the operator put it.
+func TestSaveConfigKeepsEnvSecretsOut(t *testing.T) {
+	t.Setenv("WRITEFREELY_SMTP_PASSWORD", "env")
+	file, l := fixture(t, base+"[email]\nsmtp_password = file\n")
+	a := wfapp.New(file, l)
+	if err := a.LoadConfig(); err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if got := a.App().Config().Email.Password; got != "env" {
+		t.Fatalf("loaded smtp_password %q, want env: the variable takes over the file's value", got)
+	}
+	a.App().Config().App.SiteName = "saved"
+	if err := a.SaveConfig(a.App().Config()); err != nil {
+		t.Fatalf("SaveConfig: %v", err)
+	}
+	saved, err := ini.Load(readFile(t, file))
+	if err != nil {
+		t.Fatalf("reading the saved file: %v", err)
+	}
+	site, pass := saved.Section("app").Key("site_name").String(), saved.Section("email").Key("smtp_password").String()
+	if site != "saved" || pass != "file" {
+		t.Errorf("saved site_name %q, smtp_password %q; want saved, file", site, pass)
+	}
+	if got := a.App().Config().Email.Password; got != "env" {
+		t.Errorf("after a save the server runs with smtp_password %q, want env", got)
 	}
 }
 

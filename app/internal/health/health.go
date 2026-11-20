@@ -6,13 +6,16 @@
 package health
 
 import (
+	"bufio"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -79,21 +82,37 @@ func readable(dir string) error {
 	return nil
 }
 
-// halfWithin bounds each half of Probe: the HEALTHCHECK's 10 s timeout
-// clears both, one after the other.
+// halfWithin bounds each half of Probe: the HEALTHCHECK's 15 s timeout
+// clears all three, one after the other.
 const halfWithin = 4 * time.Second
 
-// Probe checks the image is healthy, in two halves, neither of which
-// implies the other: healthURL, the health port's /healthz, answers 200,
-// and appURL, a WriteFreely page on the app port, answers 200. It prints
-// nothing and returns 0 when both hold. Otherwise it prints one
-// "<check>: <reason>" line for each half that failed, healthz or app, to
-// stderr, which is the only record of why, and returns 1.
-func Probe(ctx context.Context, appURL, healthURL string, stderr io.Writer) int {
+// maxAnswer bounds what a half reads of an answer.
+const maxAnswer = 1 << 20
+
+// Probe checks the image is healthy, in halves, none of which implies
+// another: healthURL, the health port's /healthz, answers 200; appURL, a
+// WriteFreely page on the app port, answers 200; and when gopherAddr is
+// not empty, the Gopher server there starts its answer to the root
+// selector with a well-formed menu line. It prints nothing and returns 0
+// when every half holds. Otherwise it prints one "<check>: <reason>" line
+// for each half that failed, healthz, app or gopher, to stderr, which is
+// the only record of why, and returns 1.
+func Probe(ctx context.Context, appURL, healthURL, gopherAddr string, stderr io.Writer) int {
+	type check struct {
+		name string
+		run  func(context.Context) error
+	}
+	checks := []check{
+		{"healthz", func(ctx context.Context) error { return half(ctx, healthURL) }},
+		{"app", func(ctx context.Context) error { return half(ctx, appURL) }},
+	}
+	if gopherAddr != "" {
+		checks = append(checks, check{"gopher", func(ctx context.Context) error { return gopherHalf(ctx, gopherAddr) }})
+	}
 	code := 0
-	for _, h := range []struct{ name, url string }{{"healthz", healthURL}, {"app", appURL}} {
-		if err := half(ctx, h.url); err != nil {
-			_, _ = fmt.Fprintf(stderr, "%s: %v\n", h.name, err)
+	for _, c := range checks {
+		if err := c.run(ctx); err != nil {
+			_, _ = fmt.Fprintf(stderr, "%s: %v\n", c.name, err)
 			code = 1
 		}
 	}
@@ -117,11 +136,85 @@ func half(ctx context.Context, url string) error {
 		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if _, err := io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20)); err != nil {
+	if _, err := io.Copy(io.Discard, io.LimitReader(resp.Body, maxAnswer)); err != nil {
 		return err
 	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("GET %s answered %d, want 200", req.URL.Path, resp.StatusCode)
 	}
 	return nil
+}
+
+// gopherHalf sends the root selector, an empty line, to the Gopher server
+// at addr, and reads the first line of its answer, within halfWithin. It
+// returns nil once that line is a well-formed menu line, an item or the
+// lone "." that ends a menu, and otherwise why not. It reads no further: a
+// single-user blog's root menu lists every post, so a large blog's whole
+// menu could run past maxAnswer or the half's time, and fail for good a
+// server that answers.
+func gopherHalf(ctx context.Context, addr string) error {
+	ctx, cancel := context.WithTimeout(ctx, halfWithin)
+	defer cancel()
+	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+	// The context bounds only the dial; the deadline bounds the exchange
+	if deadline, ok := ctx.Deadline(); ok {
+		if err := conn.SetDeadline(deadline); err != nil {
+			return err
+		}
+	}
+	if _, err := io.WriteString(conn, "\r\n"); err != nil {
+		return err
+	}
+	r := bufio.NewReader(io.LimitReader(conn, maxAnswer))
+	switch line, err := r.ReadString('\n'); {
+	case err == nil:
+		return menuLine(line)
+	case len(line) == maxAnswer:
+		return fmt.Errorf("the root selector's answer ran past %d bytes without a line end", maxAnswer)
+	case errors.Is(err, io.EOF):
+		return fmt.Errorf("the root selector's answer ended after %d bytes, before a whole line", len(line))
+	default:
+		return fmt.Errorf("reading the root selector's answer, after %d bytes: %w", len(line), err)
+	}
+}
+
+// menuLine returns why line, ending in "\n", is not a well-formed Gopher
+// menu line: the lone "." that ends a menu, or an item, which is an item
+// type character, then its display string, selector, host and port,
+// tab-separated, the port a number, all ended by CRLF.
+func menuLine(line string) error {
+	if line == ".\r\n" {
+		return nil
+	}
+	fail := func(why string) error {
+		return fmt.Errorf("the root selector's answer starts %q, which is no menu line: %s", clip(line), why)
+	}
+	body, ok := strings.CutSuffix(line, "\r\n")
+	if !ok {
+		return fail("it does not end in CRLF")
+	}
+	if body == "" || body[0] <= ' ' || body[0] > '~' {
+		return fail("it starts with no item type")
+	}
+	fields := strings.Split(body[1:], "\t")
+	if len(fields) < 4 {
+		return fail("it has fewer than four tab-separated fields")
+	}
+	if port, err := strconv.Atoi(fields[3]); err != nil || port < 0 || port > 65535 {
+		return fail("its port is no port number")
+	}
+	return nil
+}
+
+// clip shortens s for a reason line.
+func clip(s string) string {
+	const most = 80
+	if len(s) <= most {
+		return s
+	}
+	return s[:most] + "…"
 }

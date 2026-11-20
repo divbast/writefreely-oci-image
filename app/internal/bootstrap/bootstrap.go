@@ -14,6 +14,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/writefreely/writefreely"
@@ -27,11 +28,13 @@ import (
 
 // Options are the paths and the environment Run reads.
 type Options struct {
-	Layout    conf.Layout
-	Mounted   string    // the operator's config.ini, when it exists
-	Secret    string    // the first admin's password, when it exists
-	AdminUser string    // the first admin's name
-	Out       io.Writer // where a trial's one-time password is printed
+	Layout       conf.Layout
+	Mounted      string    // the operator's config.ini, when it exists
+	Secret       string    // a file holding the first admin's password, when it exists
+	Password     string    // the first admin's password, from conf.AdminPasswordEnv
+	PasswordFile string    // a file holding it, from conf.AdminPasswordFileEnv
+	AdminUser    string    // the first admin's name
+	Out          io.Writer // where a trial's one-time password is printed
 }
 
 // admin is who Run creates first, if anyone. A trial's password is
@@ -42,27 +45,45 @@ type admin struct {
 }
 
 // Run bootstraps the layout's WriteFreely and returns its Apper, with its
-// database closed: Initialize opens it again.
+// database closed: Initialize opens it again. It reads the database's
+// state, and makes each of its own refusals before it writes a key file,
+// the schema or a user, so none of its refusals writes any of the three.
 func Run(ctx context.Context, o *Options) (*wfapp.Apper, error) {
 	a, isMounted, err := load(o)
 	if err != nil {
 		return nil, err
 	}
-	first, err := prepare(ctx, a, o, isMounted)
+	state, err := readState(ctx, a)
 	if err != nil {
 		return nil, err
 	}
-	if first != nil {
-		err = first.create(a, o.Out)
+	first, err := decide(o, state, isMounted)
+	if err != nil {
+		return nil, err
 	}
+	err = apply(a, o, state, first)
 	if err != nil {
 		return nil, err
 	}
 	return a, nil
 }
 
-// load checks the volume, loads the working file and writes any missing
-// key file.
+// apply writes what decide allowed: each missing key file, the schema at
+// the image's migration, and the first admin, if any.
+func apply(a *wfapp.Apper, o *Options, state dbstate.State, first *admin) error {
+	if err := keys.Ensure(o.Layout.KeysDir()); err != nil {
+		return fmt.Errorf("writing the key files: %w", err)
+	}
+	if err := migrate(a, state); err != nil {
+		return err
+	}
+	if first == nil {
+		return nil
+	}
+	return first.create(a, o.Out)
+}
+
+// load checks the volume and loads the working file.
 func load(o *Options) (a *wfapp.Apper, isMounted bool, err error) {
 	l := o.Layout
 	err = writable(l)
@@ -78,41 +99,51 @@ func load(o *Options) (a *wfapp.Apper, isMounted bool, err error) {
 	if err != nil {
 		return nil, false, err
 	}
-	err = keys.Ensure(l.KeysDir())
-	if err != nil {
-		return nil, false, fmt.Errorf("writing the key files: %w", err)
-	}
 	return a, isMounted, nil
 }
 
-// prepare decides the first admin, when the database has no users, and
-// takes the schema to the image's migration.
-func prepare(ctx context.Context, a *wfapp.Apper, o *Options, isMounted bool) (*admin, error) {
-	state, err := readState(ctx, a)
-	if err != nil {
-		return nil, err
+// decide refuses a database newer than the image, key files lost from a
+// database with users, and a first admin that cannot be created, every
+// problem at once; otherwise it returns the first admin, when the
+// database has no users.
+func decide(o *Options, state dbstate.State, isMounted bool) (*admin, error) {
+	var errs []error
+	if current := migrations.CurrentVer(); state.Version > current {
+		errs = append(errs, fmt.Errorf("the database is at migration %d, newer than this image's %d: run an image at least as new as the one that last migrated it", state.Version, current))
 	}
 	var first *admin
-	if state.Users == 0 {
-		// Before the schema: a refusal here leaves the database as it was
+	if state.Users > 0 {
+		errs = append(errs, lostKeys(o.Layout.KeysDir()))
+	} else {
+		var err error
 		first, err = o.firstAdmin(isMounted)
-		if err != nil {
-			return nil, err
-		}
+		errs = append(errs, err)
 	}
-	return first, migrate(a, state)
+	return first, errors.Join(errs...)
 }
 
-// migrate creates the schema in an empty database, migrates one behind
-// the image, and refuses one ahead of it.
+// lostKeys refuses key files missing beside a database with users: new
+// ones would end every session, and could not decrypt what the old ones
+// encrypted.
+func lostKeys(dir string) error {
+	missing, err := keys.Missing(dir)
+	if err != nil {
+		return fmt.Errorf("reading the key files: %w", err)
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	return fmt.Errorf("the database has users, but %s is missing %s: restore %s from the same backup as the database; new keys would end every session and could not decrypt what the old ones encrypted", dir, and(missing), dir)
+}
+
+// migrate creates the schema in an empty database, and migrates one
+// behind the image: decide has refused one ahead of it.
 func migrate(a *wfapp.Apper, state dbstate.State) error {
-	switch current := migrations.CurrentVer(); {
+	switch {
 	case state.Empty:
 		return writefreely.CreateSchema(a)
-	case state.Version < current:
+	case state.Version < migrations.CurrentVer():
 		return writefreely.Migrate(a)
-	case state.Version > current:
-		return fmt.Errorf("the database is at migration %d, newer than this image's %d: run an image at least as new as the one that last migrated it", state.Version, current)
 	}
 	return nil
 }
@@ -158,26 +189,117 @@ func readState(ctx context.Context, a *wfapp.Apper) (dbstate.State, error) {
 }
 
 // firstAdmin decides who to create in a database with no users: the
-// operator's admin from the secret and the name, given together, or with
+// operator's admin, from the name and a password given together, or with
 // neither and nothing mounted, a trial's.
 func (o *Options) firstAdmin(isMounted bool) (*admin, error) {
-	b, err := os.ReadFile(o.Secret)
-	hasSecret := err == nil
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+	password, err := o.password()
+	if err != nil {
 		return nil, err
 	}
+	given := password != ""
 	switch {
-	case hasSecret && o.AdminUser != "":
-		password := strings.TrimRight(string(b), "\r\n")
-		if password == "" {
-			return nil, fmt.Errorf("%s is empty", o.Secret)
-		}
+	case given && o.AdminUser != "":
 		return &admin{name: o.AdminUser, password: password}, nil
-	case hasSecret || o.AdminUser != "":
-		return nil, fmt.Errorf("%s and %s go together: give both, or neither", conf.AdminUserEnv, o.Secret)
+	case given || o.AdminUser != "":
+		return nil, fmt.Errorf("%s and the admin's password, from %s, go together: give both, or neither", conf.AdminUserEnv, o.sources())
 	case isMounted:
-		return nil, fmt.Errorf("the database has no users and no admin to create: set %s and mount %s", conf.AdminUserEnv, o.Secret)
+		return nil, fmt.Errorf("the database has no users and no admin to create: set %s, and give the admin's password in %s", conf.AdminUserEnv, o.sources())
 	default:
 		return &admin{name: conf.TrialUser, password: rand.Text(), trial: true}, nil
 	}
+}
+
+// sources names where the first admin's password may come from.
+func (o *Options) sources() string {
+	return conf.AdminPasswordEnv + ", " + conf.AdminPasswordFileEnv + " or " + o.Secret
+}
+
+// password returns the first admin's password, or "" when none is given.
+// It refuses one given in more than one place, and one longer than
+// WriteFreely takes, which CreateUser would refuse only once the schema
+// was made.
+func (o *Options) password() (string, error) {
+	var given []string
+	if o.Password != "" {
+		given = append(given, conf.AdminPasswordEnv)
+	}
+	if o.PasswordFile != "" {
+		given = append(given, conf.AdminPasswordFileEnv)
+	}
+	// A secret that exists counts, readable or not: reading it says why
+	// not. The variable naming that same file is one source, not two
+	if _, err := os.Stat(o.Secret); !errors.Is(err, fs.ErrNotExist) && (o.PasswordFile == "" || !sameFile(o.PasswordFile, o.Secret)) {
+		given = append(given, o.Secret)
+	}
+	var password string
+	switch len(given) {
+	case 0:
+		return "", nil
+	case 1:
+	default:
+		return "", fmt.Errorf("the first admin's password is given in %s: give it in one of them only", and(given))
+	}
+	switch given[0] {
+	case conf.AdminPasswordEnv:
+		password = o.Password
+	case conf.AdminPasswordFileEnv:
+		p, err := readPassword(o.PasswordFile)
+		if err != nil {
+			return "", fmt.Errorf("%s: %w", conf.AdminPasswordFileEnv, err)
+		}
+		password = p
+	default:
+		p, err := readPassword(o.Secret)
+		if err != nil {
+			return "", err
+		}
+		password = p
+	}
+	if n := len(password); n > conf.MaxPasswordBytes {
+		return "", fmt.Errorf("the first admin's password, from %s, is %d bytes: WriteFreely takes at most %d", given[0], n, conf.MaxPasswordBytes)
+	}
+	return password, nil
+}
+
+// sameFile reports whether a and b name one file: the same path once
+// cleaned, or, when both exist, the same file by another path, such as a
+// link.
+func sameFile(a, b string) bool {
+	if filepath.Clean(a) == filepath.Clean(b) {
+		return true
+	}
+	ai, err := os.Stat(a)
+	if err != nil {
+		return false
+	}
+	bi, err := os.Stat(b)
+	if err != nil {
+		return false
+	}
+	return os.SameFile(ai, bi)
+}
+
+// readPassword reads the password in the file at path, without the line
+// ending a newline puts at its end, and refuses an empty one.
+func readPassword(path string) (string, error) {
+	b, err := os.ReadFile(path) //nolint:gosec // G304: the operator names this file, by the image's secret path or its variable, for exactly this read
+	if errors.Is(err, fs.ErrPermission) {
+		return "", fmt.Errorf("%w: the image runs as uid %d, which must be able to read it: give the secret uid=%d or mode=0444, or chmod 0444 the file", err, conf.UID, conf.UID)
+	}
+	if err != nil {
+		return "", err
+	}
+	password := strings.TrimRight(string(b), "\r\n")
+	if password == "" {
+		return "", fmt.Errorf("%s is empty", path)
+	}
+	return password, nil
+}
+
+// and lists items as "a", "a and b", or "a, b and c".
+func and(items []string) string {
+	if len(items) < 2 {
+		return strings.Join(items, "")
+	}
+	return strings.Join(items[:len(items)-1], ", ") + " and " + items[len(items)-1]
 }

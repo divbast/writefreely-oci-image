@@ -30,8 +30,19 @@ const (
 	MountedPath = "/etc/writefreely/config.ini"
 	// SecretPath holds the first admin's password, when mounted.
 	SecretPath = "/run/secrets/writefreely_admin_password" //nolint:gosec // G101: the path to the secret's file, not a credential
-	// AdminUserEnv names the first admin, beside SecretPath.
+	// AdminUserEnv names the first admin, beside its password.
 	AdminUserEnv = "WRITEFREELY_ADMIN_USER"
+	// AdminPasswordEnv holds the first admin's password, or
+	// AdminPasswordFileEnv names a file holding it: SecretPath's
+	// alternatives, of which at most one may be given.
+	AdminPasswordEnv     = "WRITEFREELY_ADMIN_PASSWORD"
+	AdminPasswordFileEnv = "WRITEFREELY_ADMIN_PASSWORD_FILE"
+	// MaxPasswordBytes is the longest password WriteFreely takes: bcrypt
+	// reads no further, so CreateUser refuses longer ones.
+	MaxPasswordBytes = 72
+	// UID is the user the image runs as, who must be able to read every
+	// file it is given.
+	UID = 65532
 	// TrialUser is the admin a trial creates: upstream reserves "admin".
 	TrialUser = "writer"
 	// AppPort serves WriteFreely.

@@ -5,3 +5,6 @@ package health
 
 // HalfWithin bounds each half of Probe, for the tests.
 const HalfWithin = halfWithin
+
+// MaxAnswer bounds what a half reads of an answer, for the tests.
+const MaxAnswer = maxAnswer
