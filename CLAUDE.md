@@ -208,7 +208,7 @@ naming what to change.
   ci reaches this repository only through the Renovate PR that moves every
   pin of it at once
 - **divbast/renovate-config** holds the presets `renovate.json` extends;
-  `renovate.json` adds WriteFreely's regex managers and its groups
+  `renovate.json` adds the fork's regex manager and its groups
 - **divbast/infra** holds the org's settings, this repository's rulesets,
   the `divbast-renovate` App, the `renovate` environment and
   `WRITEFREELY_AUTOMERGE`
