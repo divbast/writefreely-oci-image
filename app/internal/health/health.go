@@ -185,7 +185,9 @@ func gopherHalf(ctx context.Context, addr string) error {
 // menuLine returns why line, ending in "\n", is not a well-formed Gopher
 // menu line: the lone "." that ends a menu, or an item, which is an item
 // type character, then its display string, selector, host and port,
-// tab-separated, the port a number, all ended by CRLF.
+// tab-separated, the port a number, all ended by CRLF. A display string
+// may hold tabs of its own, which the server writes as they are, so the
+// line passes when any field from the fourth on is a port number.
 func menuLine(line string) error {
 	if line == ".\r\n" {
 		return nil
@@ -204,10 +206,12 @@ func menuLine(line string) error {
 	if len(fields) < 4 {
 		return fail("it has fewer than four tab-separated fields")
 	}
-	if port, err := strconv.Atoi(fields[3]); err != nil || port < 0 || port > 65535 {
-		return fail("its port is no port number")
+	for _, f := range fields[3:] {
+		if port, err := strconv.Atoi(f); err == nil && port >= 0 && port <= 65535 {
+			return nil
+		}
 	}
-	return nil
+	return fail("none of its fields from the fourth on is a port number")
 }
 
 // clip shortens s for a reason line.

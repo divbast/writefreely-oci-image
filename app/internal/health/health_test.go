@@ -226,6 +226,10 @@ func TestProbeGopherHalf(t *testing.T) {
 	}{
 		{name: "empty menu", answer: []byte(".\r\n"), quick: true},
 		{name: "menu", answer: []byte("iWelcome\t\tblog.example.com\t70\r\n" + item + ".\r\n"), quick: true},
+		// A blog's title is written unescaped, so a tab in it shifts the
+		// fields after it
+		{name: "a title with a tab", answer: []byte("iWelcome\tto a blog\t\tblog.example.com\t70\r\n.\r\n"), quick: true},
+		{name: "a title with two tabs", answer: []byte("iA\tblog\tof\t\tblog.example.com\t70\r\n.\r\n"), quick: true},
 		// The probe reads no further than the menu's first line, which
 		// a large blog's root menu answers at once
 		{name: "first line, then nothing", answer: []byte(item), hold: true, quick: true},
@@ -238,6 +242,7 @@ func TestProbeGopherHalf(t *testing.T) {
 		{name: "too few fields", answer: []byte("iWelcome\t\tblog.example.com\r\n.\r\n"), wantCode: 1, quick: true},
 		{name: "no item type", answer: []byte("\tWelcome\tblog.example.com\t70\r\n.\r\n"), wantCode: 1, quick: true},
 		{name: "a port that is no number", answer: []byte("iWelcome\t\tblog.example.com\tseventy\r\n.\r\n"), wantCode: 1, quick: true},
+		{name: "a title with a tab, and a port that is no number", answer: []byte("iWelcome\tto a blog\t\tblog.example.com\tseventy\r\n.\r\n"), wantCode: 1, quick: true},
 		{name: "a bare LF", answer: []byte("iWelcome\t\tblog.example.com\t70\n.\n"), wantCode: 1, quick: true},
 		{name: "a line past the read limit", answer: bytes.Repeat([]byte("i"), 2*health.MaxAnswer), hold: true, wantCode: 1, quick: true},
 	} {
