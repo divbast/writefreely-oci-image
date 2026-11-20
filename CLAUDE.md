@@ -65,7 +65,7 @@ breaking change.
 | Outbound network | **none at rest**. Federation, email, OAuth and `update_checks` connect only when used or configured |
 | Shell, package manager | **none** |
 | Processes | **one**: `divbast-writefreely serve`, as PID 1 |
-| Healthy | the shipped probe, `divbast-writefreely health`: `/healthz` on 8081 **200** and `GET /login` on 8080 **200**, and Gopher's root selector answered whole when Gopher is on |
+| Healthy | the shipped probe, `divbast-writefreely health`: `/healthz` on 8081 **200** and `GET /login` on 8080 **200**, and a well-formed menu line from Gopher's root selector when Gopher is on |
 | Engine healthcheck | Docker runs it automatically. **Podman does not** — pass `--health-cmd` yourself |
 
 - **Podman never sees this image's `HEALTHCHECK`.** Its `libimage` reads a
@@ -82,13 +82,16 @@ breaking change.
   private, single- and multi-user instances alike, where `/` redirects on
   some. When the working `config.ini` sets `gopher_port` and the
   instance is not private (a private one serves no Gopher), the probe
-  sends `127.0.0.1:<gopher_port>` the root selector and reads to the
-  menu's closing `.` line. It reads only those two keys, with go-ini,
-  never `config.Load`, which would also read every secret's `_FILE`, so
-  a secret unreadable after the start never fails a health check. Each
-  half has 4 s, so the `HEALTHCHECK`'s 15 s
-  timeout clears all three. It prints nothing when healthy, and a
-  `<check>: <reason>` line per failed half
+  sends `127.0.0.1:<gopher_port>` the root selector and reads only the
+  answer's first line, which must be a well-formed menu line, an item or
+  the closing `.`: a single-user blog's root menu lists every post, so a
+  large blog's whole menu could outrun the read limit or the 4 s. Of
+  `config.ini` it reads those two keys alone, with go-ini, never
+  `config.Load`, which would also read every secret's `_FILE`, so a
+  secret unreadable after the start never fails a health check. Each half
+  has 4 s, so the `HEALTHCHECK`'s 15 s timeout clears all three. It
+  prints nothing when healthy, and a `<check>: <reason>` line per failed
+  half
 - **One process, and it stops when told.** The binary bootstraps
   in-process and then calls WriteFreely's own `Serve`, which handles
   SIGTERM and SIGINT, drains in-flight requests for up to 8 s, closes the

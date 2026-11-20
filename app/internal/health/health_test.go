@@ -166,35 +166,52 @@ func TestProbe(t *testing.T) {
 }
 
 // gopherServer is the address of a Gopher server that reads a selector
-// and answers it with answer, then closes the connection, or with a nil
-// answer, accepts and never answers.
-func gopherServer(t *testing.T, answer []byte) string {
+// and writes answer, then closes the connection, or with hold, keeps it
+// open, saying nothing more, until the test ends.
+func gopherServer(t *testing.T, answer []byte, hold bool) string {
 	t.Helper()
 	ln, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = ln.Close() })
+	done := make(chan struct{})
+	t.Cleanup(func() { close(done); _ = ln.Close() })
 	go func() {
 		for {
 			c, err := ln.Accept()
 			if err != nil {
 				return
 			}
-			if answer == nil {
-				t.Cleanup(func() { _ = c.Close() })
-				continue
-			}
 			go func() {
 				defer func() { _ = c.Close() }()
 				if _, err := bufio.NewReader(c).ReadString('\n'); err != nil {
 					return
 				}
-				_, _ = c.Write(answer)
+				// A probe that stops reading closes its end, which ends
+				// a write it left unread
+				if _, err := c.Write(answer); err != nil {
+					return
+				}
+				if hold {
+					<-done
+				}
 			}()
 		}
 	}()
 	return ln.Addr().String()
+}
+
+// item is a well-formed Gopher menu line.
+const item = "0Jan 2, 2026 - A post\t/a-post\tblog.example.com\t70\r\n"
+
+// hugeMenu is a root menu past what the probe reads of an answer, as a
+// single-user blog with many thousands of posts answers.
+func hugeMenu() []byte {
+	menu := []byte("iA blog\t\terror.host\t1\r\n")
+	for len(menu) <= 2*health.MaxAnswer {
+		menu = append(menu, item...)
+	}
+	return append(menu, ".\r\n"...)
 }
 
 func TestProbeGopherHalf(t *testing.T) {
@@ -202,20 +219,38 @@ func TestProbeGopherHalf(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		answer   []byte
+		hold     bool // the server keeps the connection open after answer
 		wantCode int
+		// The probe decides before the half's budget runs out
+		quick bool
 	}{
-		{name: "empty menu", answer: []byte(".\r\n")},
-		{name: "menu", answer: []byte("iWelcome\t\tblog.example.com\t70\r\n1A blog\t/a/\tblog.example.com\t70\r\n.\r\n")},
-		{name: "never answers", wantCode: 1},
-		// Closed before the lone "." line: the answer was cut short
-		{name: "cut short", answer: []byte("iWelcome\t\tblog.example.com\t70\r\n"), wantCode: 1},
+		{name: "empty menu", answer: []byte(".\r\n"), quick: true},
+		{name: "menu", answer: []byte("iWelcome\t\tblog.example.com\t70\r\n" + item + ".\r\n"), quick: true},
+		// The probe reads no further than the menu's first line, which
+		// a large blog's root menu answers at once
+		{name: "first line, then nothing", answer: []byte(item), hold: true, quick: true},
+		{name: "first line, then closed", answer: []byte(item), quick: true},
+		{name: "a menu past the read limit", answer: hugeMenu(), quick: true},
+		{name: "never answers", hold: true, wantCode: 1},
+		{name: "closed at once", wantCode: 1, quick: true},
+		{name: "part of a line, then closed", answer: []byte("0Jan 2"), wantCode: 1, quick: true},
+		{name: "garbage, then nothing", answer: []byte("HTTP/1.1 400 Bad Request\r\n"), hold: true, wantCode: 1, quick: true},
+		{name: "too few fields", answer: []byte("iWelcome\t\tblog.example.com\r\n.\r\n"), wantCode: 1, quick: true},
+		{name: "no item type", answer: []byte("\tWelcome\tblog.example.com\t70\r\n.\r\n"), wantCode: 1, quick: true},
+		{name: "a port that is no number", answer: []byte("iWelcome\t\tblog.example.com\tseventy\r\n.\r\n"), wantCode: 1, quick: true},
+		{name: "a bare LF", answer: []byte("iWelcome\t\tblog.example.com\t70\n.\n"), wantCode: 1, quick: true},
+		{name: "a line past the read limit", answer: bytes.Repeat([]byte("i"), 2*health.MaxAnswer), hold: true, wantCode: 1, quick: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			var stderr bytes.Buffer
 			start := time.Now()
-			code := health.Probe(t.Context(), answering(t, http.StatusOK), answering(t, http.StatusOK), gopherServer(t, tc.answer), &stderr)
-			if took, limit := time.Since(start), 3*health.HalfWithin+time.Second; took > limit {
+			code := health.Probe(t.Context(), answering(t, http.StatusOK), answering(t, http.StatusOK), gopherServer(t, tc.answer, tc.hold), &stderr)
+			limit := 3*health.HalfWithin + time.Second
+			if tc.quick {
+				limit = health.HalfWithin / 2
+			}
+			if took := time.Since(start); took > limit {
 				t.Errorf("Probe took %v, want at most %v", took, limit)
 			}
 			if code != tc.wantCode {
