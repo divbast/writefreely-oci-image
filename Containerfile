@@ -1,14 +1,22 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # SPDX-FileCopyrightText: 2026 Aryan Ameri <github@aryan.ameri.coffee>
 
-# WriteFreely's release. Renovate moves these three in one PR, with
-# app/go.mod's github.com/writefreely/writefreely; its regexes need them
-# adjacent and in this order, the tag directly above the sha256. The version tags the image: app-publish.yml
-# reads it from this line, by the name build.yml gives as version-arg. The
-# tag and the sha256 name the release's amd64 tarball, which the prose
-# stage takes the editor's bundle from: the release publishes no checksum
-# file, so the sha256 is the one GitHub's API gives the asset.
+# WriteFreely's release, which divbast's fork builds on, with app/go.mod's
+# require of github.com/writefreely/writefreely. The version tags the image:
+# app-publish.yml reads it from this line, by the name build.yml gives as
+# version-arg. The tag and the sha256 name the release's amd64 tarball,
+# which the prose stage takes the editor's bundle from: the release
+# publishes no checksum file, so the sha256 is the one GitHub's API gives
+# the asset. Renovate leaves these three alone while the image is on the
+# fork; its regexes need the tag directly above the sha256.
+#
+# The fork's build, which app/go.mod's replace links and which names the
+# image's version: what divbast-writefreely version prints and the version
+# label say, and the extra tag app-publish.yml reads from this line, by the
+# name build.yml gives as extra-tag-arg. Renovate moves it with the replace
+# in one PR.
 ARG WRITEFREELY_VERSION=0.17.3
+ARG WRITEFREELY_FORK_VERSION=0.17.3-divbast.7
 ARG WRITEFREELY_TAG=v0.17.3
 ARG WRITEFREELY_TARBALL_SHA256=207d1e4b7f8629c6b45c1da00b37ada910e28f1331ecce60dd82cb2ec78cf8b1
 # Every image below is a Docker Hardened Image on Debian 13, pinned by
@@ -29,22 +37,29 @@ ARG NODE_IMAGE=dhi.io/node:26.13.1-debian13-dev@sha256:01fb968fd1a4c448008e44db0
 ARG RUNTIME_IMAGE=dhi.io/static:20250419-debian13@sha256:4749130e822c145dbdf9ca11ec0cc2f694b5fe687fd74268a2b62160e6726f39
 
 # divbast's binary, with WriteFreely linked in as a library from the module
-# app/go.mod pins, and upstream's templates, pages, static files and LESS
-# from that module's own tree.
+# app/go.mod pins, the fork's build its replace names, and the templates,
+# pages, static files and LESS from that module's own tree.
 FROM ${GO_IMAGE} AS go
 ARG WRITEFREELY_VERSION
+ARG WRITEFREELY_FORK_VERSION
 ARG WRITEFREELY_TAG
 SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
 ENV GOTOOLCHAIN=local GOFLAGS=-mod=readonly
 WORKDIR /src
 COPY app/go.mod app/go.sum ./
-# The version the image is tagged with must be the one it links: a bump
+# The versions the image is tagged with must be the ones it links: a bump
 # that moved the Containerfile's pins and not go.mod's, or the other way,
-# fails here rather than ship a wrong tag
+# fails here rather than ship a wrong tag. That holds for the release
+# go.mod requires and for the fork build its replace names
 RUN go mod download \
     && mod=$(go list -m -f '{{.Version}}' github.com/writefreely/writefreely) \
     && if [ "${mod}" != "${WRITEFREELY_TAG}" ] || [ "${WRITEFREELY_TAG#v}" != "${WRITEFREELY_VERSION}" ]; then \
         echo "app/go.mod links WriteFreely ${mod}; the Containerfile pins ${WRITEFREELY_TAG} and ${WRITEFREELY_VERSION}" >&2; \
+        exit 1; \
+    fi \
+    && fork=$(go list -m -f '{{if .Replace}}{{.Replace.Version}}{{end}}' github.com/writefreely/writefreely) \
+    && if [ "${fork}" != "v${WRITEFREELY_FORK_VERSION}" ]; then \
+        echo "app/go.mod links the fork build ${fork:-none}; the Containerfile pins v${WRITEFREELY_FORK_VERSION}" >&2; \
         exit 1; \
     fi \
     && dir=$(go list -m -f '{{.Dir}}' github.com/writefreely/writefreely) \
@@ -53,9 +68,13 @@ RUN go mod download \
 COPY app/ ./
 # Static, so the static runtime serves: CGO for SQLite, linked
 # with -static, and netgo and osusergo for the resolver and user lookups
-# that would otherwise reach for glibc's NSS at run time
+# that would otherwise reach for glibc's NSS at run time. WriteFreely's own
+# version is the release the fork builds on, since its update check and
+# release-notes links compare and name it as an upstream release, and
+# NodeInfo and its User-Agent carry it; version prints the fork build, from
+# the binary's own forkVersion
 RUN CGO_ENABLED=1 go build -trimpath -tags sqlite,netgo,osusergo \
-    -ldflags="-s -w -X github.com/writefreely/writefreely.softwareVer=${WRITEFREELY_VERSION} -extldflags -static" \
+    -ldflags="-s -w -X github.com/writefreely/writefreely.softwareVer=${WRITEFREELY_VERSION} -X main.forkVersion=${WRITEFREELY_FORK_VERSION} -extldflags -static" \
     -o /out/divbast-writefreely ./cmd/divbast-writefreely
 
 # Upstream's make ui, for the stylesheets: its four LESS files, compiled
@@ -122,7 +141,7 @@ RUN node --input-type=module -e ' \
     && test -s /out/prose.bundle.js
 
 FROM ${RUNTIME_IMAGE}
-ARG WRITEFREELY_VERSION
+ARG WRITEFREELY_FORK_VERSION
 
 # Root-owned, and never written
 COPY --from=go /out/divbast-writefreely /usr/local/bin/divbast-writefreely
@@ -141,7 +160,7 @@ ENV TMPDIR=/tmp
 LABEL org.opencontainers.image.source="https://github.com/divbast/writefreely-oci-image" \
     org.opencontainers.image.url="https://github.com/divbast/writefreely-oci-image" \
     org.opencontainers.image.title="WriteFreely" \
-    org.opencontainers.image.version="${WRITEFREELY_VERSION}" \
+    org.opencontainers.image.version="${WRITEFREELY_FORK_VERSION}" \
     org.opencontainers.image.licenses="AGPL-3.0-only"
 
 EXPOSE 8080 8081

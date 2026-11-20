@@ -39,8 +39,7 @@ func TestRun(t *testing.T) {
 		wantOut  string   // a substring of stdout; empty wants none
 		wantErr  []string // substrings of stderr; none wants it empty
 	}{
-		// Upstream's own version string, whichever release is linked: the
-		// image's build sets it, and Renovate moves the release
+		// With no fork build set, as in tests, WriteFreely's own version
 		{name: "version", args: []string{"version"}, wantOut: writefreely.FormatVersion() + "\n"},
 		{name: "none", wantCode: 2, wantErr: []string{"usage: divbast-writefreely"}},
 		{name: "unknown", args: []string{"nope"}, wantCode: 2, wantErr: []string{"usage: divbast-writefreely"}},
@@ -83,5 +82,17 @@ func TestRun(t *testing.T) {
 				t.Errorf("run(%q) left %s behind (stat: %v)", tc.args, o.Layout.DataConfig(), err)
 			}
 		})
+	}
+}
+
+// version names the fork build the image's build sets, in WriteFreely's
+// own form, and falls back to WriteFreely's version without one.
+func TestVersionLine(t *testing.T) {
+	t.Parallel()
+	if got, want := versionLine("0.17.3-divbast.7"), "WriteFreely 0.17.3-divbast.7"; got != want {
+		t.Errorf("versionLine(fork build) = %q, want %q", got, want)
+	}
+	if got, want := versionLine(""), writefreely.FormatVersion(); got != want {
+		t.Errorf("versionLine(\"\") = %q, want %q", got, want)
 	}
 }

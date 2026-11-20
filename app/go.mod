@@ -5,6 +5,14 @@ module github.com/divbast/writefreely-oci-image/app
 
 go 1.27.4
 
+// WriteFreely is built from divbast's fork, which carries fixes the image
+// relies on, as builds tagged v0.17.3-divbast.N. The require below stays at
+// the upstream release the fork builds on, and the module path, so every
+// import, stays upstream's. The replace goes once an upstream release has
+// the fixes. Renovate moves the fork build here and the Containerfile's
+// WRITEFREELY_FORK_VERSION in one PR, and the build fails unless they match.
+replace github.com/writefreely/writefreely => github.com/aryonoco/writefreely v0.17.3-divbast.7
+
 require (
 	// config.Save's own serialiser, so the admin panel's saves write the
 	// file as WriteFreely does, without the chmod that fails on a mounted
@@ -23,16 +31,13 @@ require (
 	github.com/beevik/etree v1.8.1 // indirect
 	github.com/captncraig/cors v0.0.0-20190703115713-e80254a89df1 // indirect
 	github.com/chzyer/readline v1.5.1 // indirect
-	github.com/dchest/uniuri v1.2.0 // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
 	github.com/embedas/go-embed v1.1.3 // indirect
 	github.com/fatih/color v1.19.0 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
-	github.com/go-fed/httpsig v1.1.0 // indirect
 	github.com/go-sql-driver/mysql v1.10.2 // indirect
 	github.com/gobuffalo/envy v1.10.2 // indirect
 	github.com/gofrs/uuid v4.4.0+incompatible // indirect
-	github.com/gologme/log v1.3.0 // indirect
 	github.com/gorilla/csrf v1.7.3 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/gorilla/feeds v1.2.0 // indirect
@@ -64,7 +69,6 @@ require (
 	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
 	github.com/toorop/go-dkim v0.0.0-20250226130143-9025cce95817 // indirect
 	github.com/writeas/activity v0.1.2 // indirect
-	github.com/writeas/activityserve v0.0.0-20240830214310-c451e1525408 // indirect
 	github.com/writeas/go-strip-markdown/v2 v2.1.1 // indirect
 	github.com/writeas/go-webfinger v1.1.0 // indirect
 	github.com/writeas/go-writeas/v2 v2.1.1 // indirect
@@ -84,7 +88,6 @@ require (
 	golang.org/x/net v0.63.0 // indirect
 	golang.org/x/sys v0.50.0 // indirect
 	golang.org/x/text v0.44.0 // indirect
-	gopkg.in/ini.v1 v1.68.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	h12.io/socks v1.0.3 // indirect
 )

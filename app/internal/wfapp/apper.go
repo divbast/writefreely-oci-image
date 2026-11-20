@@ -54,13 +54,15 @@ func (a *Apper) LoadConfig() error {
 // It writes as config.Save does, through go-ini in place, but leaves the
 // file's mode alone: config.Save chmods it to 0600 afterwards, which fails
 // on a mounted file uid 65532 can write but does not own, and reports a
-// failure for a save that landed.
+// failure for a save that landed. As config.Save does, it writes c's
+// ForSave copy, so a secret set from the environment keeps the file's own
+// value there and is never written into it.
 func (a *Apper) SaveConfig(c *config.Config) error {
 	if err := conf.Enforce(c, a.file, a.layout); err != nil {
 		return err
 	}
 	f := ini.Empty()
-	if err := ini.ReflectFrom(f, c); err != nil {
+	if err := ini.ReflectFrom(f, c.ForSave()); err != nil {
 		return err
 	}
 	return f.SaveTo(a.file)

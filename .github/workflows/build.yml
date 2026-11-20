@@ -40,7 +40,7 @@ concurrency:
 jobs:
   check:
     name: check
-    uses: divbast/ci/.github/workflows/app-check.yml@49942945d737bf104e174614de847133d16200e8 # v4.3.0
+    uses: divbast/ci/.github/workflows/app-check.yml@8c5c550b0b8643085468702286bfc05438adb24b # v4.4.0
     with:
       # The DHI login, without which dhi.io answers nothing: the lint and
       # the build log in with it to read a Containerfile's Docker Hardened
@@ -84,10 +84,14 @@ jobs:
     if: >-
       github.ref == 'refs/heads/main'
       && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
-    uses: divbast/ci/.github/workflows/app-publish.yml@49942945d737bf104e174614de847133d16200e8 # v4.3.0
+    uses: divbast/ci/.github/workflows/app-publish.yml@8c5c550b0b8643085468702286bfc05438adb24b # v4.4.0
     with:
       image: ghcr.io/divbast/writefreely
+      # The image is tagged with WriteFreely's release, from version-arg,
+      # and with the fork build it links, from extra-tag-arg; each tag
+      # moves with the image's own updates
       version-arg: WRITEFREELY_VERSION
+      extra-tag-arg: WRITEFREELY_FORK_VERSION
       description: WriteFreely, federated blogging. Zero capabilities, no new privileges, read-only root, non-root, no shell
     # Everything app-publish.yml's job asks for: a called job that asks for
     # more than its caller grants fails.

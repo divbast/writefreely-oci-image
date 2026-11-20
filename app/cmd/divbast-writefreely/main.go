@@ -15,7 +15,8 @@
 //
 // serve bootstraps /data, then serves WriteFreely on 8080 and /healthz on
 // 8081, as PID 1, until SIGTERM or SIGINT. health is the HEALTHCHECK's
-// probe. version prints WriteFreely's version. user manages users through
+// probe. version prints the build of WriteFreely it links: the fork build
+// the image's build names. user manages users through
 // the working config.ini, once serve has made it; delete and reset-pass
 // ask at the terminal, as upstream's do. Exit codes: 0 for success, 1 for
 // a refusal or a failure, 2 for a wrong command line.
@@ -50,6 +51,22 @@ const (
 	userUsage = "usage: divbast-writefreely user create [--admin] <name>:<password> | delete <name> | reset-pass <name>"
 )
 
+// forkVersion is the build of divbast's fork of WriteFreely the binary
+// links, which the image's build sets with -X from the Containerfile's
+// WRITEFREELY_FORK_VERSION. WriteFreely's own version stays the upstream
+// release the fork builds on: its update check and release-notes links
+// compare and name it as an upstream release.
+var forkVersion string
+
+// versionLine is what version prints: the fork build fork, or with none,
+// as in tests, WriteFreely's own version.
+func versionLine(fork string) string {
+	if fork == "" {
+		return writefreely.FormatVersion()
+	}
+	return "WriteFreely " + fork
+}
+
 func main() {
 	o := bootstrap.Options{
 		Layout:    conf.Image,
@@ -82,7 +99,7 @@ func run(args []string, o *bootstrap.Options, stderr io.Writer) int {
 			"http://127.0.0.1:"+strconv.Itoa(conf.AppPort)+"/login",
 			"http://127.0.0.1:"+strconv.Itoa(conf.HealthPort)+"/healthz", stderr)
 	case "version":
-		if _, err := fmt.Fprintln(o.Out, writefreely.FormatVersion()); err != nil {
+		if _, err := fmt.Fprintln(o.Out, versionLine(forkVersion)); err != nil {
 			return 1
 		}
 		return 0
