@@ -5,8 +5,11 @@
 # upstream's development branch after it, plus fixes), with app/go.mod's
 # require of github.com/writefreely/writefreely. The version tags the image:
 # app-publish.yml reads it from this line, by the name build.yml gives as
-# version-arg. It moves by hand, together with the require, when the fork
-# moves to a new upstream release; Renovate looks up neither.
+# version-arg. It moves by hand when the fork moves to a new upstream
+# release, together with the require and the acceptance suite's pattern for
+# a fork build, ^0\.17\.3-divbast\.\d+$ in test/acceptance/serves_test.go;
+# Renovate looks up none of the three. Everything else moves through
+# Renovate, the fork's build below included.
 #
 # The fork's build, which app/go.mod's replace links and which names the
 # image's version: what divbast-writefreely version prints and the version
@@ -21,7 +24,8 @@ ARG WRITEFREELY_FORK_VERSION=0.17.3-divbast.23
 #
 # The newest stable Go, in Docker Hardened Images' -dev variant, which has
 # the gcc and static glibc WriteFreely's CGO SQLite links against. Only the
-# binary, upstream's trees and the editor's source leave its stage.
+# binary and the fork's trees, the editor's source among them, leave its
+# stage.
 ARG GO_IMAGE=dhi.io/golang:1.27.4-debian13-dev@sha256:2f58c6928a851f0b6059f1a63514828a788a748d88b218a1bc9ae23c3b540140
 # Node's LTS, in the -dev variant, for compiling WriteFreely's LESS and
 # building the editor's bundle. Only the CSS and the bundle leave its
@@ -86,7 +90,9 @@ RUN CGO_ENABLED=1 go build -trimpath -tags sqlite,netgo,osusergo \
     -o /out/divbast-writefreely ./cmd/divbast-writefreely
 # Proof that the build fetched no part of WriteFreely's own module: the
 # replace fetches the fork's module in its place, so once the binary is
-# built the module cache must hold nothing under upstream's path
+# built the module cache must hold nothing under upstream's path. The stage
+# keeps the module cache in its layers: a --mount=type=cache on it would
+# defeat the check, since an empty cache passes
 RUN upstream="$(go env GOMODCACHE)/cache/download/github.com/writefreely/writefreely" \
     && if [ -e "${upstream}" ]; then \
         echo "the build fetched WriteFreely's own module, github.com/writefreely/writefreely; it takes WriteFreely only from the fork" >&2; \
@@ -113,7 +119,8 @@ RUN set -eu; \
 # tree of the module the go stage linked, so the editor the image serves is
 # the one the fork's tests cover, never a bundle built elsewhere. npm
 # installs from the registry alone and runs no install script. The bundle
-# is JavaScript, so one build serves every architecture.
+# is JavaScript, so the same source and lockfile build the same bundle on
+# every architecture.
 FROM ${NODE_IMAGE} AS prose
 SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
 COPY --from=go /out/prose /build/prose
@@ -135,10 +142,11 @@ RUN node -e ' \
             } \
         } \
         process.exit(bad > 0 ? 1 : 0);'
-# The build needs no install script: webpack and Babel, devDependencies
-# that npm ci installs, do it all. webpack writes the bundle to static/js
-# beside prose/, where WriteFreely's tree serves it from
-RUN npm ci --ignore-scripts --no-audit --no-fund \
+# The build needs no install script: webpack and Babel do it all. They are
+# devDependencies, so --include=dev installs them whatever NODE_ENV the
+# base image sets. webpack writes the bundle to static/js beside prose/,
+# where WriteFreely's tree serves it from
+RUN npm ci --include=dev --ignore-scripts --no-audit --no-fund \
     && npm run build \
     && test -s /build/static/js/prose.bundle.js
 

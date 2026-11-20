@@ -104,8 +104,13 @@ breaking change.
 - **The application is root-owned and never written**: the binary and
   upstream's trees under `/usr/local/share/writefreely`. Everything the
   app writes lives on `/data`, or `/tmp`
-- **Updates come through Renovate alone**, which merges its own pull
-  requests on green while `WRITEFREELY_AUTOMERGE` is `enabled`. A merge
+- **Updates come through Renovate**, the fork's build included, which
+  merges its own pull requests on green while `WRITEFREELY_AUTOMERGE` is
+  `enabled`. Three things move by hand, in one pull request, when the
+  fork moves to a new upstream release: `WRITEFREELY_VERSION`,
+  `app/go.mod`'s require of `github.com/writefreely/writefreely`, and the
+  acceptance suite's fork-build pattern `^0\.17\.3-divbast\.\d+$` in
+  `test/acceptance/serves_test.go`. Renovate looks up none of them. A merge
   never publishes: `build.yml`'s daily slot and its button do, through
   divbast/ci's `app-publish.yml`. `stall.yml` fails each day that updates
   have stopped flowing

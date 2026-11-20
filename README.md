@@ -21,19 +21,21 @@ divbast's fork of WriteFreely,
 [`aryonoco/writefreely`, branch `divbast`](https://github.com/aryonoco/writefreely/tree/divbast),
 at the build `app/go.mod` pins: upstream WriteFreely's development
 branch after the 0.17.3 release, plus fixes this image relies on. The
-image uses it through its exported API and its `Apper` seam, and builds
-from upstream WriteFreely again once a release has the fixes. Beside the
-binary are the fork's templates, pages and static files from that same
-build; its stylesheets, compiled from its LESS by a pinned `lessc`; and
-the editor's bundle, `prose.bundle.js`, built in the image's `node`
-`-dev` stage from the fork's `prose/` source, with the packages its
-lockfile pins from the npm registry and no install script run. No part
-of the image comes from WriteFreely's own repository: the build fails if
-it fetches upstream's module. Every stage of the build is also a Docker
-Hardened Image: the binary is built on DHI's `golang` `-dev`, and the
-stylesheets and the editor's bundle on its `node` `-dev`. Every image the
-build uses is pinned by digest, and CI builds nothing until it has
-verified Docker's signature on each.
+image uses it through its exported API and its `Apper` seam. Building
+from upstream WriteFreely again would mean dropping `app/go.mod`'s
+replace, and with it the build's two checks that it takes nothing from
+WriteFreely's own repository. Beside the binary are the fork's
+templates, pages and static files from that same build; its stylesheets,
+compiled from its LESS by a pinned `lessc`; and the editor's bundle,
+`prose.bundle.js`, built in the image's `node` `-dev` stage from the
+fork's `prose/` source, with the packages its lockfile pins from the npm
+registry and no install script run. No part of the image comes from
+WriteFreely's own repository: the build fails if it fetches upstream's
+module. Every stage of the build is also a Docker Hardened Image: the
+binary is built on DHI's `golang` `-dev`, and the stylesheets and the
+editor's bundle on its `node` `-dev`. Every image the build uses is
+pinned by digest, and CI builds nothing until it has verified Docker's
+signature on each.
 
 ## Container Features
 
@@ -417,21 +419,26 @@ The engine records why a check failed:
 Every input the Containerfile names is pinned: the Docker Hardened
 Images, `golang`, `node` and `static`, by digest, the WriteFreely release
 the fork builds on by `WRITEFREELY_VERSION` and `app/go.mod`'s require,
-which move by hand when the fork moves to a new release, the build of
-divbast's fork by `WRITEFREELY_FORK_VERSION` and `app/go.mod`'s replace,
-the editor's packages by the fork's `prose/package-lock.json`, `lessc`
-and its clean-css plugin by `css/package-lock.json`, and every Go module
-by `app/go.sum`.
+the build of divbast's fork by `WRITEFREELY_FORK_VERSION` and
+`app/go.mod`'s replace, the editor's packages by the fork's
+`prose/package-lock.json`, `lessc` and its clean-css plugin by
+`css/package-lock.json`, and every Go module by `app/go.sum`.
 
-A pin only moves through a pull request, and
-[Renovate](https://docs.renovatebot.com/) opens those. It runs every
+A pin only moves through a pull request. Three things move by hand, in
+one pull request, when the fork moves to a new upstream release:
+`WRITEFREELY_VERSION`, `app/go.mod`'s require of
+`github.com/writefreely/writefreely`, and the acceptance suite's pattern
+for a fork build, `^0\.17\.3-divbast\.\d+$` in
+`test/acceptance/serves_test.go`. Renovate looks up none of them.
+Everything else, the fork's build included, moves through pull requests
+[Renovate](https://docs.renovatebot.com/) opens. It runs every
 morning, after every merge to `main`, whenever CI finishes on one of its
 branches and when the Dependency Dashboard issue is edited, from
 `.github/workflows/renovate.yml`, which calls divbast/ci's shared Renovate
 workflow, as the divbast org's `divbast-renovate` GitHub App. Its settings
 are divbast/renovate-config's shared presets, and `renovate.json` adds
-WriteFreely's managers and groups. The pull requests Renovate opens here
-are:
+the fork's manager and this repository's groups. The pull requests
+Renovate opens here are:
 
 - A build of divbast's fork arrives as one `writefreely-fork` pull
   request that moves `WRITEFREELY_FORK_VERSION` in the Containerfile and
@@ -442,7 +449,7 @@ are:
 - The other Go modules' minor and patch releases arrive grouped in one pull
   request, which tidies `app/go.mod`; a major arrives on its own, unless it
   moves a module only WriteFreely imports to a new path, which waits for
-  a WriteFreely release that adopts it.
+  a build of the fork that adopts it.
 - A new Go, Node or `static` image, or a new digest of one, arrives as a
   pull request that moves its pin, and CI verifies Docker's signature on
   it before it builds. `lessc` and its plugin move by pull requests of
