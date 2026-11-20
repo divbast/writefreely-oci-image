@@ -68,7 +68,7 @@ require (
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d // indirect
 	github.com/nxadm/tail v1.4.11 // indirect
-	github.com/petermattis/goid v0.0.0-20261109124353-7cfa343ad0ab // indirect
+	github.com/petermattis/goid v0.0.0-20261120131106-3f141f74aebc // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rainycape/unidecode v0.0.0-20150907023854-cb7f23ec59be // indirect
 	github.com/rogpeppe/go-internal v1.16.0 // indirect
