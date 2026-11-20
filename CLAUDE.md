@@ -102,10 +102,15 @@ breaking change.
   under `--cap-drop ALL`, and the contract's `file-capability` check runs
   `divbast-writefreely version` to prove it
 - **The application is root-owned and never written**: the binary and
-  upstream's trees under `/usr/local/share/writefreely`. Everything the
+  the fork's trees under `/usr/local/share/writefreely`. Everything the
   app writes lives on `/data`, or `/tmp`
-- **Updates come through Renovate alone**, which merges its own pull
-  requests on green while `WRITEFREELY_AUTOMERGE` is `enabled`. A merge
+- **Updates come through Renovate**, the fork's build included, which
+  merges its own pull requests on green while `WRITEFREELY_AUTOMERGE` is
+  `enabled`. Three things move by hand, in one pull request, when the
+  fork moves to a new upstream release: `WRITEFREELY_VERSION`,
+  `app/go.mod`'s require of `github.com/writefreely/writefreely`, and the
+  acceptance suite's fork-build pattern `^0\.17\.3-divbast\.\d+$` in
+  `test/acceptance/serves_test.go`. Renovate looks up none of them. A merge
   never publishes: `build.yml`'s daily slot and its button do, through
   divbast/ci's `app-publish.yml`. `stall.yml` fails each day that updates
   have stopped flowing
@@ -120,9 +125,11 @@ naming what to change.
   divbast's fork of WriteFreely,
   [`aryonoco/writefreely`, branch `divbast`](https://github.com/aryonoco/writefreely/tree/divbast),
   a module dependency used through its exported API and its `Apper`
-  seam, until upstream has the fixes. A fix to WriteFreely itself lands
-  in the fork, never as a patch in this repository. A fork build that
-  changes that API fails its bump PR's build, red by design
+  seam, until upstream has the fixes; the replace then goes, and with it
+  the build's two checks that it takes nothing from WriteFreely's own
+  repository. A fix to WriteFreely itself lands in the fork, never as a
+  patch in this repository. A fork build that changes that API fails its
+  bump PR's build, red by design
 - **The working file** is `/etc/writefreely/config.ini` when mounted, and
   otherwise `/data/config.ini`, written once from upstream's
   `config.New()` on SQLite. A mounted `/etc/writefreely` without
@@ -208,7 +215,7 @@ naming what to change.
   ci reaches this repository only through the Renovate PR that moves every
   pin of it at once
 - **divbast/renovate-config** holds the presets `renovate.json` extends;
-  `renovate.json` adds WriteFreely's regex managers and its groups
+  `renovate.json` adds the fork's regex manager and its groups
 - **divbast/infra** holds the org's settings, this repository's rulesets,
   the `divbast-renovate` App, the `renovate` environment and
   `WRITEFREELY_AUTOMERGE`
@@ -249,11 +256,11 @@ naming what to change.
   whose os-release says `ID="debian"`, so the scan stays on Trivy; the
   `go` stage's `dhi.io/golang` `-dev`, which has the gcc and static glibc
   the CGO SQLite build links against; and the `css` and `prose` stages'
-  `dhi.io/node` `-dev`. Neither `-dev` image has curl or gzip, so the
-  `prose` stage fetches the tarball with Node's `fetch` and unpacks it with
-  Node's zlib. Never add a stage from another publisher: before
-  `app-check.yml` builds anything, `divbast-verify-images` verifies
-  Docker's signature on each, with cosign from `mise.toml`
+  `dhi.io/node` `-dev`, where the `prose` stage builds the editor's bundle
+  from the fork's `prose/` source. Never add a stage from another
+  publisher: before `app-check.yml` builds anything,
+  `divbast-verify-images` verifies Docker's signature on each, with cosign
+  from `mise.toml`
 - **dhi.io serves nothing without a login.** A local `just build` or
   `just lint` needs `docker login dhi.io`; `divbast-verify-images` reads
   the login from `DHI_USERNAME` and `DHI_TOKEN`, which `build.yml` and

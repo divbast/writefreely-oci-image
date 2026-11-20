@@ -5,25 +5,6 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "ARG WRITEFREELY_VERSION, the bare version the image is tagged with. The dockerfile manager only reads an ARG that a FROM expands, and this one feeds the image's tag and the build's check that app/go.mod links the same release. Upstream tags releases as v0.17.3.",
-      "managerFilePatterns": ["/^Containerfile$/"],
-      "matchStrings": ["ARG WRITEFREELY_VERSION=(?<currentValue>\\S+)"],
-      "depNameTemplate": "writefreely/writefreely",
-      "datasourceTemplate": "github-releases",
-      "extractVersionTemplate": "^v(?<version>.+)$",
-      "versioningTemplate": "semver"
-    },
-    {
-      "customType": "regex",
-      "description": "ARG WRITEFREELY_TAG and the ARG WRITEFREELY_TARBALL_SHA256 beneath it, captured together so one PR moves both: the release's amd64 tarball, which the prose stage takes the editor's bundle from. The release publishes no checksum file; github-release-attachments computes the new tarball's sha256 from the release. Its digest lookup reads releases/tags/<currentValue>, so the value is the tag as written, v and all. The two ARGs must stay adjacent and in this order.",
-      "managerFilePatterns": ["/^Containerfile$/"],
-      "matchStrings": ["ARG WRITEFREELY_TAG=(?<currentValue>v\\S+)\\nARG WRITEFREELY_TARBALL_SHA256=(?<currentDigest>[0-9a-f]{64})"],
-      "depNameTemplate": "writefreely/writefreely",
-      "datasourceTemplate": "github-release-attachments",
-      "versioningTemplate": "semver"
-    },
-    {
-      "customType": "regex",
       "description": "ARG WRITEFREELY_FORK_VERSION, the build of divbast's fork of WriteFreely that app/go.mod's replace links, which names the image's version and its extra tag. The fork's release workflow tags each build v0.17.3-divbast.N. Semver versioning orders 0.17.3-divbast.8 above 0.17.3-divbast.7, where docker versioning would read -divbast.N as a fixed variant and offer nothing.",
       "managerFilePatterns": ["/^Containerfile$/"],
       "matchStrings": ["ARG WRITEFREELY_FORK_VERSION=(?<currentValue>\\S+)"],
@@ -41,7 +22,7 @@
       "enabled": true
     },
     {
-      "description": "A major that changes an indirect module's path can never apply. Go names v2 and later by path, github.com/writeas/go-writeas/v3 beside .../v2 and gopkg.in/yaml.v3 beside gopkg.in/yaml.v2, so the new major is a separate module that only WriteFreely's own code could import. Tidy drops it and falls back to the lowest release of the old path the graph needs, which downgrades it: go-writeas went from v2.1.1 to v2.0.2 that way. A major keeps its path only from v0 to v1, and between +incompatible releases, which have no go.mod; those still move, as do minor and patch releases. A new major reaches the image when upstream moves to it, through the WriteFreely release PR.",
+      "description": "A major that changes an indirect module's path can never apply. Go names v2 and later by path, github.com/writeas/go-writeas/v3 beside .../v2 and gopkg.in/yaml.v3 beside gopkg.in/yaml.v2, so the new major is a separate module that only WriteFreely's own code could import. Tidy drops it and falls back to the lowest release of the old path the graph needs, which downgrades it: go-writeas went from v2.1.1 to v2.0.2 that way. A major keeps its path only from v0 to v1, and between +incompatible releases, which have no go.mod; those still move, as do minor and patch releases. A new major reaches the image when WriteFreely moves to it, through the writefreely-fork PR.",
       "matchManagers": ["gomod"],
       "matchDepTypes": ["indirect"],
       "matchUpdateTypes": ["major"],
@@ -49,7 +30,7 @@
       "enabled": false
     },
     {
-      "description": "The other Go modules' minor, patch and digest updates in one PR; every Go update runs go mod tidy, set above, majors included: Renovate skips tidy on a major unless gomodUpdateImportPaths is set beside it, which also rewrites this module's own imports of a module whose major changes its path. Only app/ has a go.sum for tidy: the root module, whose replace names ./.ci, has none, so Renovate updates no artifacts there. WriteFreely moves in its own PR, and divbast/ci never through gomod; the go line is no module, and keeps the preset's Dashboard approval. Majors arrive one by one, and automerge.",
+      "description": "The other Go modules' minor, patch and digest updates in one PR; every Go update runs go mod tidy, set above, majors included: Renovate skips tidy on a major unless gomodUpdateImportPaths is set beside it, which also rewrites this module's own imports of a module whose major changes its path. Only app/ has a go.sum for tidy: the root module, whose replace names ./.ci, has none, so Renovate updates no artifacts there. WriteFreely's require moves by hand and its fork in its own PR, and divbast/ci never through gomod; the go line is no module, and keeps the preset's Dashboard approval. Majors arrive one by one, and automerge.",
       "matchManagers": ["gomod"],
       "matchDepTypes": ["require", "indirect"],
       "matchUpdateTypes": ["minor", "patch", "digest"],
@@ -57,7 +38,7 @@
       "groupName": "Go modules"
     },
     {
-      "description": "github.com/go-ini/ini ends at v1.67.0: from v1.67.1 its go.mod declares the module path gopkg.in/ini.v1, so no later release can be required by this path, and a PR proposing one could never build. WriteFreely's config package and SaveConfig both import it by this path. A later release reaches it only when upstream moves to gopkg.in/ini.v1, through the WriteFreely release PR.",
+      "description": "github.com/go-ini/ini ends at v1.67.0: from v1.67.1 its go.mod declares the module path gopkg.in/ini.v1, so no later release can be required by this path, and a PR proposing one could never build. WriteFreely's config package and SaveConfig both import it by this path. A later release reaches it only when WriteFreely moves to gopkg.in/ini.v1, through the writefreely-fork PR.",
       "matchManagers": ["gomod"],
       "matchDepNames": ["github.com/go-ini/ini"],
       "allowedVersions": "<1.67.1"
@@ -75,16 +56,8 @@
       "maxMajorIncrement": 0
     },
     {
-      "description": "A WriteFreely release in one PR: the version and the tarball's tag and sha256 in the Containerfile, and app/go.mod and go.sum, since the build fails unless they name the same release. It merges once every check passes, like every other update here, and majors are no exception: the acceptance suite, not the size of the bump, holds a release back.",
-      "matchDepNames": ["writefreely/writefreely", "github.com/writefreely/writefreely"],
-      "groupName": "writefreely",
-      "labels": ["writefreely"],
-      "commitMessagePrefix": "writefreely:",
-      "automerge": true
-    },
-    {
-      "description": "WriteFreely's own releases stay where they are while the image is on divbast's fork: the Containerfile's WRITEFREELY_VERSION, WRITEFREELY_TAG and WRITEFREELY_TARBALL_SHA256, and app/go.mod's require of github.com/writefreely/writefreely, which name the release the fork builds on. A newer release reaches the image through the fork. Re-enable them when the image moves back to upstream and drops the replace, by deleting this rule: the writefreely group above then moves them again.",
-      "matchDepNames": ["writefreely/writefreely", "github.com/writefreely/writefreely"],
+      "description": "app/go.mod's require of github.com/writefreely/writefreely names the release divbast's fork builds on, and keeps the module path every import uses; the replace fetches the fork in its place. It moves by hand, together with the Containerfile's WRITEFREELY_VERSION, when the fork moves to a new upstream release. WriteFreely's releases reach the image through the fork, in the writefreely-fork group below.",
+      "matchDepNames": ["github.com/writefreely/writefreely"],
       "enabled": false
     },
     {
