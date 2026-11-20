@@ -17,7 +17,7 @@
 # name build.yml gives as extra-tag-arg. Renovate moves it with the replace
 # in one PR.
 ARG WRITEFREELY_VERSION=0.17.3
-ARG WRITEFREELY_FORK_VERSION=0.17.3-divbast.9
+ARG WRITEFREELY_FORK_VERSION=0.17.3-divbast.15
 ARG WRITEFREELY_TAG=v0.17.3
 ARG WRITEFREELY_TARBALL_SHA256=207d1e4b7f8629c6b45c1da00b37ada910e28f1331ecce60dd82cb2ec78cf8b1
 # Every image below is a Docker Hardened Image on Debian 13, pinned by
@@ -69,11 +69,12 @@ RUN go mod download \
 COPY app/ ./
 # Static, so the static runtime serves: CGO for SQLite, linked
 # with -static, and netgo and osusergo for the resolver and user lookups
-# that would otherwise reach for glibc's NSS at run time. WriteFreely's own
-# version is the release the fork builds on, since its update check and
-# release-notes links compare and name it as an upstream release, and
-# NodeInfo and its User-Agent carry it; version prints the fork build, from
-# the binary's own forkVersion
+# that would otherwise reach for glibc's NSS at run time. WriteFreely reports
+# the release its version builds on (0.17.3, since the fork is upstream's
+# development branch after that release, plus fixes), because its update
+# check and release-notes links compare and name it as an upstream
+# release, and NodeInfo and its User-Agent carry it; version prints the fork
+# build, from the binary's own forkVersion
 RUN CGO_ENABLED=1 go build -trimpath -tags sqlite,netgo,osusergo \
     -ldflags="-s -w -X github.com/writefreely/writefreely.softwareVer=${WRITEFREELY_VERSION} -X main.forkVersion=${WRITEFREELY_FORK_VERSION} -extldflags -static" \
     -o /out/divbast-writefreely ./cmd/divbast-writefreely

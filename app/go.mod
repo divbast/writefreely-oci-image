@@ -6,12 +6,13 @@ module github.com/divbast/writefreely-oci-image/app
 go 1.27.4
 
 // WriteFreely is built from divbast's fork, which carries fixes the image
-// relies on, as builds tagged v0.17.3-divbast.N. The require below stays at
-// the upstream release the fork branches after, and the module path, so every
-// import, stays upstream's. The replace goes once an upstream release has
-// the fixes. Renovate moves the fork build here and the Containerfile's
-// WRITEFREELY_FORK_VERSION in one PR, and the build fails unless they match.
-replace github.com/writefreely/writefreely => github.com/aryonoco/writefreely v0.17.3-divbast.9
+// relies on, as builds tagged v0.17.3-divbast.N: upstream's development
+// branch after the 0.17.3 release, plus fixes. The require below stays at
+// that release, and the module path, so every import, stays upstream's.
+// The replace goes once an upstream release has the fixes. Renovate moves
+// the fork build here and the Containerfile's WRITEFREELY_FORK_VERSION in
+// one PR, and the build fails unless they match.
+replace github.com/writefreely/writefreely => github.com/aryonoco/writefreely v0.17.3-divbast.15
 
 require (
 	// config.Save's own serialiser, so the admin panel's saves write the

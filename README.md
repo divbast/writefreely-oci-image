@@ -276,9 +276,10 @@ for a proxy that connects over a Unix socket, which has no effect here:
 the image listens on TCP 8080, never on a socket. WriteFreely takes a
 request from a listed proxy to come from the client its `X-Forwarded-For`
 names. Left unset, every visitor seems to come from the proxy, and so
-shares one login limit:
-after 10 failed logins from one client address in 15 minutes, that
-address's logins are refused for the rest of the window.
+shares one login limit: after 10 failed logins from one client address in
+15 minutes, that address's logins are refused for the rest of the window.
+When an address reaches the limit, one line is logged, with a hint about
+`trusted_proxies` when it is empty.
 
 **Federation.** Every ActivityPub inbox request must carry a valid HTTP
 signature, or it is refused. The signature is checked against
@@ -292,14 +293,18 @@ deliveries for want of their keys, and lookups and mentions of their
 users fail. Caddy and Traefik pass it by default, while nginx needs
 `proxy_set_header Host $host;` and Apache `ProxyPreserveHost On` to pass it
 through. `[server] inbox_max_bytes` caps an inbox request's body, at
-1048576 bytes (1 MiB) unless set, and a larger one is answered 413.
+1048576 bytes (1 MiB) unless set, and a larger one is answered 413. Remote
+actor and WebFinger documents the blog fetches are limited to 1 MiB.
 
 **Forms and the session cookie.** Every write made with the login cookie
 carries a CSRF token, which WriteFreely's own pages send, and a write
 without one is refused: a client of your own that writes with the session
 cookie must send the token too. A page left open across an upgrade needs
 a reload before its next save. Clients that authenticate with an API
-token, in the `Authorization` header, are unaffected.
+token, in the `Authorization` header, are unaffected. Behind a reverse
+proxy, a `Referrer-Policy` of `same-origin` or
+`strict-origin-when-cross-origin` is safest; `no-referrer` works in
+browsers that send `Sec-Fetch-Site`, which all current ones do.
 
 ### Accounts
 
