@@ -102,7 +102,7 @@ breaking change.
   under `--cap-drop ALL`, and the contract's `file-capability` check runs
   `divbast-writefreely version` to prove it
 - **The application is root-owned and never written**: the binary and
-  upstream's trees under `/usr/local/share/writefreely`. Everything the
+  the fork's trees under `/usr/local/share/writefreely`. Everything the
   app writes lives on `/data`, or `/tmp`
 - **Updates come through Renovate**, the fork's build included, which
   merges its own pull requests on green while `WRITEFREELY_AUTOMERGE` is
@@ -125,9 +125,11 @@ naming what to change.
   divbast's fork of WriteFreely,
   [`aryonoco/writefreely`, branch `divbast`](https://github.com/aryonoco/writefreely/tree/divbast),
   a module dependency used through its exported API and its `Apper`
-  seam, until upstream has the fixes. A fix to WriteFreely itself lands
-  in the fork, never as a patch in this repository. A fork build that
-  changes that API fails its bump PR's build, red by design
+  seam, until upstream has the fixes; the replace then goes, and with it
+  the build's two checks that it takes nothing from WriteFreely's own
+  repository. A fix to WriteFreely itself lands in the fork, never as a
+  patch in this repository. A fork build that changes that API fails its
+  bump PR's build, red by design
 - **The working file** is `/etc/writefreely/config.ini` when mounted, and
   otherwise `/data/config.ini`, written once from upstream's
   `config.New()` on SQLite. A mounted `/etc/writefreely` without
