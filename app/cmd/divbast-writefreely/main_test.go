@@ -56,8 +56,9 @@ func TestRun(t *testing.T) {
 		// Before the first serve there is no working file, and user must
 		// not make one in the wrong place, nor ask for a password first
 		{name: "user before serve", args: []string{"user", "create", "a"}, wantCode: 1, wantErr: []string{"no working config yet: start the server once with serve first"}},
-		// Nothing listens on either port in a test
-		{name: "health", args: []string{"health"}, wantCode: 1, wantErr: []string{"healthz: ", "app: "}},
+		// Nothing listens on either port in a test, and with no working
+		// config there is no telling whether Gopher is on
+		{name: "health", args: []string{"health"}, wantCode: 1, wantErr: []string{"healthz: ", "app: ", "gopher: "}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -230,6 +231,66 @@ func TestUserCreateRefusesColonForm(t *testing.T) { //nolint:paralleltest // Wri
 	for _, name := range []string{"bob", "bobpw", "bob:pw"} {
 		if n := users(t, &o, name); n != 0 {
 			t.Errorf("%d users named %s, want none", n, name)
+		}
+	}
+}
+
+// gopherAddr reads the working config: Gopher's address when it serves,
+// on its port and not on a private instance, and nothing otherwise.
+func TestGopherAddr(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, ini, want string
+	}{
+		{name: "off", ini: "[app]\nhost = https://blog.example.com\n"},
+		{name: "on", ini: "[app]\nhost = https://blog.example.com\n[server]\ngopher_port = 7070\n", want: "127.0.0.1:7070"},
+		{name: "advertised elsewhere", ini: "[app]\nhost = https://blog.example.com\n[server]\ngopher_port = 7070\ngopher_advertised_port = 70\n", want: "127.0.0.1:7070"},
+		// WriteFreely serves no Gopher on a private instance
+		{name: "private", ini: "[app]\nhost = https://blog.example.com\nprivate = true\n[server]\ngopher_port = 7070\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var out bytes.Buffer
+			o := options(t, &out)
+			if err := os.MkdirAll(filepath.Dir(o.Mounted), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(o.Mounted, []byte(tc.ini), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if got, err := gopherAddr(&o); err != nil || got != tc.want {
+				t.Errorf("gopherAddr = %q, %v; want %q", got, err, tc.want)
+			}
+		})
+	}
+	var out bytes.Buffer
+	o := options(t, &out)
+	if got, err := gopherAddr(&o); err == nil {
+		t.Errorf("gopherAddr with no working config = %q, nil; want an error", got)
+	}
+}
+
+// The probe decides on Gopher from config.ini alone: a secret's _FILE
+// that cannot be read is serve's to refuse at start, and never fails a
+// health check while Gopher is off or on.
+func TestGopherAddrIgnoresSecretFiles(t *testing.T) {
+	t.Setenv("WRITEFREELY_SMTP_PASSWORD_FILE", filepath.Join(t.TempDir(), "unreadable"))
+	for _, tc := range []struct {
+		name, ini, want string
+	}{
+		{name: "off", ini: "[app]\nhost = https://blog.example.com\n"},
+		{name: "on", ini: "[app]\nhost = https://blog.example.com\n[server]\ngopher_port = 7070\n", want: "127.0.0.1:7070"},
+	} {
+		var out bytes.Buffer
+		o := options(t, &out)
+		if err := os.MkdirAll(filepath.Dir(o.Mounted), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(o.Mounted, []byte(tc.ini), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if got, err := gopherAddr(&o); err != nil || got != tc.want {
+			t.Errorf("%s: gopherAddr = %q, %v; want %q", tc.name, got, err, tc.want)
 		}
 	}
 }

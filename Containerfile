@@ -166,13 +166,13 @@ LABEL org.opencontainers.image.source="https://github.com/divbast/writefreely-oc
 EXPOSE 8080 8081
 # Exec form: the shell form would need /bin/sh, which the image lacks.
 # --timeout must clear divbast-writefreely health's own budget: it allows
-# each of its two exchanges 4 s and runs them one after the other, so a
-# listener that accepts and never answers costs 8 s. A shorter timeout
-# kills the probe mid-flight and records a bare engine timeout instead of
-# the probe's own line, which is the only diagnostic there is. Podman reads
-# no HEALTHCHECK from an image published as an OCI index: its users pass
-# the same array as --health-cmd.
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+# each of its exchanges 4 s and runs them one after the other, three with
+# Gopher on, so listeners that accept and never answer cost 12 s. A
+# shorter timeout kills the probe mid-flight and records a bare engine
+# timeout instead of the probe's own lines, which are the only diagnostic
+# there is. Podman reads no HEALTHCHECK from an image published as an OCI
+# index: its users pass the same array as --health-cmd.
+HEALTHCHECK --interval=30s --timeout=15s --start-period=60s --retries=3 \
     CMD ["/usr/local/bin/divbast-writefreely", "health"]
 USER 65532:65532
 # The binary, as PID 1: it bootstraps /data in-process, then serves

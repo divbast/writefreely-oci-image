@@ -41,6 +41,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-ini/ini"
 	"github.com/gorilla/mux"
 	"github.com/manifoldco/promptui"
 	"github.com/mattn/go-isatty"
@@ -104,9 +105,16 @@ func run(args []string, o *bootstrap.Options, stdin io.Reader, stderr io.Writer)
 	case "serve":
 		return serve(ctx, o, stderr)
 	case "health":
-		return health.Probe(ctx,
+		gopher, err := gopherAddr(o)
+		code := health.Probe(ctx,
 			"http://127.0.0.1:"+strconv.Itoa(conf.AppPort)+"/login",
-			"http://127.0.0.1:"+strconv.Itoa(conf.HealthPort)+"/healthz", stderr)
+			"http://127.0.0.1:"+strconv.Itoa(conf.HealthPort)+"/healthz", gopher, stderr)
+		if err != nil {
+			// A failed write to stderr leaves nowhere to report it
+			_, _ = fmt.Fprintf(stderr, "gopher: cannot tell whether Gopher is on: %v\n", err)
+			return 1
+		}
+		return code
 	case "version":
 		if _, err := fmt.Fprintln(o.Out, versionLine(forkVersion)); err != nil {
 			return 1
@@ -254,6 +262,39 @@ func readPassword(stdin io.Reader) (string, error) {
 		return "", errors.New("no password given: type it at the terminal, or give it as one line on stdin")
 	}
 	return password, nil
+}
+
+// gopherAddr returns where the health probe finds Gopher: 127.0.0.1 at
+// gopher_port when WriteFreely serves Gopher, which it never does on a
+// private instance, and "" when it serves none. It reads those two keys
+// of the working config.ini with go-ini, as WriteFreely's config.Load
+// parses them, and nothing else: config.Load would also read every
+// secret's _FILE, so a secret that became unreadable after the start
+// would fail every health check, with Gopher on or off.
+func gopherAddr(o *bootstrap.Options) (string, error) {
+	path, err := existing(o)
+	if err != nil {
+		return "", err
+	}
+	f, err := ini.Load(path)
+	if err != nil {
+		return "", fmt.Errorf("reading %s: %w", path, err)
+	}
+	port, private := 0, false
+	if k := f.Section("server").Key("gopher_port"); k.String() != "" {
+		if port, err = k.Int(); err != nil {
+			return "", fmt.Errorf("%s: [server] gopher_port: %w", path, err)
+		}
+	}
+	if k := f.Section("app").Key("private"); k.String() != "" {
+		if private, err = k.Bool(); err != nil {
+			return "", fmt.Errorf("%s: [app] private: %w", path, err)
+		}
+	}
+	if port <= 0 || private {
+		return "", nil
+	}
+	return net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), nil
 }
 
 // existing returns the working file if there is one yet.

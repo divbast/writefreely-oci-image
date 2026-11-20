@@ -6,11 +6,13 @@
 package health
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -79,21 +81,37 @@ func readable(dir string) error {
 	return nil
 }
 
-// halfWithin bounds each half of Probe: the HEALTHCHECK's 10 s timeout
-// clears both, one after the other.
+// halfWithin bounds each half of Probe: the HEALTHCHECK's 15 s timeout
+// clears all three, one after the other.
 const halfWithin = 4 * time.Second
 
-// Probe checks the image is healthy, in two halves, neither of which
-// implies the other: healthURL, the health port's /healthz, answers 200,
-// and appURL, a WriteFreely page on the app port, answers 200. It prints
-// nothing and returns 0 when both hold. Otherwise it prints one
-// "<check>: <reason>" line for each half that failed, healthz or app, to
-// stderr, which is the only record of why, and returns 1.
-func Probe(ctx context.Context, appURL, healthURL string, stderr io.Writer) int {
+// maxAnswer bounds what a half reads of an answer.
+const maxAnswer = 1 << 20
+
+// Probe checks the image is healthy, in halves, none of which implies
+// another: healthURL, the health port's /healthz, answers 200; appURL, a
+// WriteFreely page on the app port, answers 200; and when gopherAddr is
+// not empty, the Gopher server there answers the root selector with a
+// whole menu. It prints nothing and returns 0 when every half holds.
+// Otherwise it prints one "<check>: <reason>" line for each half that
+// failed, healthz, app or gopher, to stderr, which is the only record of
+// why, and returns 1.
+func Probe(ctx context.Context, appURL, healthURL, gopherAddr string, stderr io.Writer) int {
+	type check struct {
+		name string
+		run  func(context.Context) error
+	}
+	checks := []check{
+		{"healthz", func(ctx context.Context) error { return half(ctx, healthURL) }},
+		{"app", func(ctx context.Context) error { return half(ctx, appURL) }},
+	}
+	if gopherAddr != "" {
+		checks = append(checks, check{"gopher", func(ctx context.Context) error { return gopherHalf(ctx, gopherAddr) }})
+	}
 	code := 0
-	for _, h := range []struct{ name, url string }{{"healthz", healthURL}, {"app", appURL}} {
-		if err := half(ctx, h.url); err != nil {
-			_, _ = fmt.Fprintf(stderr, "%s: %v\n", h.name, err)
+	for _, c := range checks {
+		if err := c.run(ctx); err != nil {
+			_, _ = fmt.Fprintf(stderr, "%s: %v\n", c.name, err)
 			code = 1
 		}
 	}
@@ -117,11 +135,49 @@ func half(ctx context.Context, url string) error {
 		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if _, err := io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20)); err != nil {
+	if _, err := io.Copy(io.Discard, io.LimitReader(resp.Body, maxAnswer)); err != nil {
 		return err
 	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("GET %s answered %d, want 200", req.URL.Path, resp.StatusCode)
 	}
 	return nil
+}
+
+// gopherHalf sends the root selector, an empty line, to the Gopher server
+// at addr, and reads its answer up to the lone "." line that ends a menu,
+// all within halfWithin. It returns why the answer did not arrive whole.
+func gopherHalf(ctx context.Context, addr string) error {
+	ctx, cancel := context.WithTimeout(ctx, halfWithin)
+	defer cancel()
+	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+	// The context bounds only the dial; the deadline bounds the exchange
+	if deadline, ok := ctx.Deadline(); ok {
+		if err := conn.SetDeadline(deadline); err != nil {
+			return err
+		}
+	}
+	if _, err := io.WriteString(conn, "\r\n"); err != nil {
+		return err
+	}
+	var answer []byte
+	buf := make([]byte, 4096)
+	for {
+		n, err := conn.Read(buf)
+		answer = append(answer, buf[:n]...)
+		switch {
+		case bytes.Equal(answer, []byte(".\r\n")) || bytes.HasSuffix(answer, []byte("\n.\r\n")):
+			return nil
+		case len(answer) > maxAnswer:
+			return fmt.Errorf("the root selector's answer ran past %d bytes without its closing \".\" line", maxAnswer)
+		case errors.Is(err, io.EOF):
+			return fmt.Errorf("the root selector's answer ended after %d bytes without its closing \".\" line", len(answer))
+		case err != nil:
+			return fmt.Errorf("reading the root selector's answer, after %d bytes: %w", len(answer), err)
+		}
+	}
 }

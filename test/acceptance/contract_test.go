@@ -91,7 +91,7 @@ func TestContract(t *testing.T) {
 				Healthcheck: contract.Healthcheck{
 					Test:        slices.Concat([]string{"CMD"}, healthCmd),
 					Interval:    30 * time.Second,
-					Timeout:     10 * time.Second,
+					Timeout:     15 * time.Second,
 					StartPeriod: 60 * time.Second,
 					Retries:     3,
 				},

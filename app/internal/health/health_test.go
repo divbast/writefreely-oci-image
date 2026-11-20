@@ -4,6 +4,7 @@
 package health_test
 
 import (
+	"bufio"
 	"bytes"
 	"database/sql"
 	"net"
@@ -138,7 +139,7 @@ func TestProbe(t *testing.T) {
 			t.Parallel()
 			var stderr bytes.Buffer
 			start := time.Now()
-			code := health.Probe(t.Context(), tc.app, tc.healthz, &stderr)
+			code := health.Probe(t.Context(), tc.app, tc.healthz, "", &stderr)
 			if took, limit := time.Since(start), 2*health.HalfWithin+time.Second; took > limit {
 				t.Errorf("Probe took %v, want at most %v", took, limit)
 			}
@@ -162,4 +163,89 @@ func TestProbe(t *testing.T) {
 			}
 		})
 	}
+}
+
+// gopherServer is the address of a Gopher server that reads a selector
+// and answers it with answer, then closes the connection, or with a nil
+// answer, accepts and never answers.
+func gopherServer(t *testing.T, answer []byte) string {
+	t.Helper()
+	ln, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			if answer == nil {
+				t.Cleanup(func() { _ = c.Close() })
+				continue
+			}
+			go func() {
+				defer func() { _ = c.Close() }()
+				if _, err := bufio.NewReader(c).ReadString('\n'); err != nil {
+					return
+				}
+				_, _ = c.Write(answer)
+			}()
+		}
+	}()
+	return ln.Addr().String()
+}
+
+func TestProbeGopherHalf(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name     string
+		answer   []byte
+		wantCode int
+	}{
+		{name: "empty menu", answer: []byte(".\r\n")},
+		{name: "menu", answer: []byte("iWelcome\t\tblog.example.com\t70\r\n1A blog\t/a/\tblog.example.com\t70\r\n.\r\n")},
+		{name: "never answers", wantCode: 1},
+		// Closed before the lone "." line: the answer was cut short
+		{name: "cut short", answer: []byte("iWelcome\t\tblog.example.com\t70\r\n"), wantCode: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var stderr bytes.Buffer
+			start := time.Now()
+			code := health.Probe(t.Context(), answering(t, http.StatusOK), answering(t, http.StatusOK), gopherServer(t, tc.answer), &stderr)
+			if took, limit := time.Since(start), 3*health.HalfWithin+time.Second; took > limit {
+				t.Errorf("Probe took %v, want at most %v", took, limit)
+			}
+			if code != tc.wantCode {
+				t.Errorf("Probe = %d, want %d; stderr %q", code, tc.wantCode, stderr.String())
+			}
+			switch {
+			case tc.wantCode == 0 && stderr.Len() != 0:
+				t.Errorf("a healthy Probe printed %q", stderr.String())
+			case tc.wantCode != 0 && (!strings.HasPrefix(stderr.String(), "gopher: ") || strings.Count(stderr.String(), "\n") != 1):
+				t.Errorf("Probe printed %q, want one gopher: line", stderr.String())
+			}
+		})
+	}
+	// Nothing listening is a failed half too
+	var stderr bytes.Buffer
+	if code := health.Probe(t.Context(), answering(t, http.StatusOK), answering(t, http.StatusOK), closedAddr(t), &stderr); code != 1 || !strings.HasPrefix(stderr.String(), "gopher: ") {
+		t.Errorf("Probe with nothing on the Gopher port = %d, %q; want 1 and a gopher: line", code, stderr.String())
+	}
+}
+
+// closedAddr is an address nothing listens on: a listener's, closed.
+func closedAddr(t *testing.T) string {
+	t.Helper()
+	ln, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := ln.Addr().String()
+	if err := ln.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return addr
 }

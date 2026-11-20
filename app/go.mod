@@ -16,7 +16,9 @@ replace github.com/writefreely/writefreely => github.com/aryonoco/writefreely v0
 require (
 	// config.Save's own serialiser, so the admin panel's saves write the
 	// file as WriteFreely does, without the chmod that fails on a mounted
-	// file the container does not own
+	// file the container does not own; and config.Load's own parser, so
+	// the health probe reads the two keys it needs as WriteFreely does,
+	// without config.Load reading every secret's _FILE as well
 	github.com/go-ini/ini v1.67.0
 	// InitRoutes takes a *mux.Router
 	github.com/gorilla/mux v1.8.1

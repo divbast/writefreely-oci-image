@@ -16,16 +16,21 @@ on Docker Hardened Images'
 [`static`](https://hub.docker.com/hardened-images/catalog) for Debian 13,
 which holds nothing else but CA certificates, time zones and the
 `nonroot` user: no shell and no package manager. The binary is divbast's
-own `main` with WriteFreely linked in as a library, from the WriteFreely
-release `app/go.mod` pins, so no upstream file is patched. Beside it are
-upstream's templates, pages and static files from that same release; its
-stylesheets, compiled from its LESS by a pinned `lessc`; and its editor's
-bundle, `prose.bundle.js`, taken from the release's tarball and checked
-against a pinned sha256. Every stage of the build is also a Docker
-Hardened Image: the binary is built on DHI's `golang` `-dev`, and the
-stylesheets and the editor's bundle on its `node` `-dev`. Every image the
-build uses is pinned by digest, and CI builds nothing until it has
-verified Docker's signature on each.
+own `main` with WriteFreely linked in as a library. It builds from
+divbast's fork of WriteFreely,
+[`aryonoco/writefreely`, branch `divbast`](https://github.com/aryonoco/writefreely/tree/divbast),
+at the build `app/go.mod` pins: upstream WriteFreely's development
+branch after the 0.17.3 release, plus fixes this image relies on. The
+image uses it through its exported API and its `Apper` seam, and builds
+from upstream WriteFreely again once a release has the fixes. Beside the
+binary are the fork's templates, pages and static files from that same
+build; its stylesheets, compiled from its LESS by a pinned `lessc`; and
+the editor's bundle, `prose.bundle.js`, taken from the WriteFreely 0.17.3
+release's tarball and checked against a pinned sha256. Every stage of the
+build is also a Docker Hardened Image: the binary is built on DHI's
+`golang` `-dev`, and the stylesheets and the editor's bundle on its
+`node` `-dev`. Every image the build uses is pinned by digest, and CI
+builds nothing until it has verified Docker's signature on each.
 
 ## Container Features
 
@@ -42,7 +47,7 @@ verified Docker's signature on each.
 | Shell in image | none |
 | Package manager | none |
 | Outbound network | none at rest. Federation, email, OAuth and update checks connect out only when used or configured |
-| Healthy | the shipped probe: `/healthz` 200 **and** `GET /login` 200 |
+| Healthy | the shipped probe: `/healthz` 200 **and** `GET /login` 200, **and** Gopher's root menu when Gopher is on |
 
 ## Running
 
@@ -61,10 +66,16 @@ podman run -d --name writefreely \
 `--read-only-tmpfs=false` and `--health-cmd` are Podman's alone, as
 [Health](#health) says. Docker takes the same command without them.
 
-`:0.17.3` names the WriteFreely version, and `:latest` the newest image.
-Each new image of a version moves that version's tag. The
-`:<version>-<arch>` and `:<version>-staging` tags are the publish's
-working tags, not for use.
+`:0.17.3` names the WriteFreely release the fork's version builds on,
+`:0.17.3-divbast.N` the build of divbast's fork the image links, and
+`:latest` the newest image. `:0.17.3` and `:0.17.3-divbast.N` both move with the
+image's own dependency updates: each new image moves them. A digest,
+`ghcr.io/divbast/writefreely@sha256:…`, is the only reference that never
+moves. The index's version annotation says the release, `0.17.3`, while
+the image's `org.opencontainers.image.version` label and
+`divbast-writefreely version` say the fork build. The `:<version>-<arch>`
+and `:<version>-staging` tags are the publish's working tags, not for
+use.
 
 Under a Quadlet, the equivalents of the confinement, the tmpfs and the
 health check are:
@@ -80,11 +91,21 @@ Tmpfs=/tmp:size=16m,noexec,nosuid,nodev
 HealthCmd=["/usr/local/bin/divbast-writefreely","health"]
 ```
 
-Every start bootstraps `/data` before WriteFreely serves: it writes any
-missing key file, creates the schema in an empty database, migrates one
-an older image left behind, and creates the first admin. A start it
-cannot honour exits 1 with a line naming what to change, and serves
-nothing.
+Every start bootstraps `/data` before WriteFreely serves: on a new
+volume it writes the key files, it creates the schema in an empty
+database, migrates one an older image left behind, and creates the first
+admin. A start it cannot honour exits 1 with a line naming what to
+change, and serves nothing. The bootstrap reads the database first, and
+makes each of its own refusals before it writes a key file, the schema
+or a user; a refused first start can still leave `/data/config.ini`, an
+empty `/data/keys/` and an empty database behind. WriteFreely's own
+checks, such as both SMTP TLS settings or a malformed
+`trusted_proxies`, refuse the start only after the bootstrap has written
+all three.
+
+On SIGTERM, which `podman stop` and `docker stop` send, WriteFreely stops
+taking requests, lets those in flight finish for up to 8 s, closes the
+database and exits 0, inside the engines' default 10 s.
 
 ### The trial
 
@@ -123,14 +144,37 @@ podman run -d --name writefreely \
   ghcr.io/divbast/writefreely:0.17.3
 ```
 
-The password is the file `writefreely_admin_password` in the secrets
-directory; a newline at its end is not part of it. The admin is created
+The admin's password comes from one of these, and only one:
+
+- the file `writefreely_admin_password` in the secrets directory, as above;
+- `WRITEFREELY_ADMIN_PASSWORD_FILE`, naming a file anywhere in the
+  container;
+- `WRITEFREELY_ADMIN_PASSWORD`, holding the password itself, which then
+  sits in the container's environment for anyone who can inspect it.
+
+A newline at the end of a file is not part of the password, and an empty
+variable counts as unset; a `WRITEFREELY_ADMIN_PASSWORD_FILE` naming the
+mounted secret itself is one source. More than one source is refused, and
+so is a password over 72 bytes, the most WriteFreely takes, before the
+bootstrap writes a key file, the schema or a user. The admin is created
 only while the database has no users, so the name and the password have
 no effect after the first start, and are needed only for it. Give both or
 neither: one without the other is refused, and so is a mounted
 `config.ini` with no users and no admin to create. A mounted
 `/etc/writefreely` with no `config.ini` in it is refused too, rather than
 taken for the trial.
+
+The admin's name is also the blog's handle on the fediverse,
+`@name@host`, which other servers keep: it is public, and cannot change
+once the blog federates.
+
+**Every file the image reads must be readable by uid 65532**, its user:
+`config.ini`, the password file and any secret file below. On the host,
+`chmod 0444` the file in a directory others may enter (`chmod 0755`), or
+`chown 65532` it. A Podman secret takes `uid=65532` or `mode=0444`, as in
+`--secret writefreely_admin_password,uid=65532`, which mounts it at
+`/run/secrets/writefreely_admin_password`. An unreadable password file is
+refused, naming the file and uid 65532.
 
 `config.ini` is WriteFreely's own, as
 [its documentation](https://writefreely.org/docs/latest/admin/config)
@@ -161,15 +205,63 @@ values:
 - with the directory mounted read-write, and `config.ini` writable by uid
   65532, into your file, which WriteFreely rewrites whole, so its comments
   are lost;
-- with it mounted read-only, as above, the save fails and the panel says
-  why. The change holds until the next restart, and is gone after it.
+- with it mounted read-only, as above, the settings form is shown
+  read-only, with a notice saying why, and a save changes nothing.
+
+A setting changes only once the file is written: a save that fails
+leaves the running instance as it was. A secret given through the
+environment, below, is never written into the file by a save.
+
+### Secrets from the environment
+
+Each of these secrets can come from a variable instead of `config.ini`,
+or from a file the variable's `_FILE` twin names, and either takes the
+place of the file's value:
+
+| Secret | Variable, and its `_FILE` twin | `config.ini` key |
+|---|---|---|
+| SMTP password | `WRITEFREELY_SMTP_PASSWORD` | `[email] smtp_password` |
+| Mailgun private key | `WRITEFREELY_MAILGUN_PRIVATE` | `[email] mailgun_private` |
+| Slack OAuth client secret | `WRITEFREELY_OAUTH_SLACK_CLIENT_SECRET` | `[oauth.slack] client_secret` |
+| Write.as OAuth client secret | `WRITEFREELY_OAUTH_WRITEAS_CLIENT_SECRET` | `[oauth.writeas] client_secret` |
+| GitLab OAuth client secret | `WRITEFREELY_OAUTH_GITLAB_CLIENT_SECRET` | `[oauth.gitlab] client_secret` |
+| Gitea OAuth client secret | `WRITEFREELY_OAUTH_GITEA_CLIENT_SECRET` | `[oauth.gitea] client_secret` |
+| Generic OAuth client secret | `WRITEFREELY_OAUTH_GENERIC_CLIENT_SECRET` | `[oauth.generic] client_secret` |
+
+`WRITEFREELY_SMTP_PASSWORD_FILE=/run/secrets/smtp_password`, for
+instance, reads the SMTP password from that file, without one trailing
+newline. An empty variable counts as unset. Setting a variable and its
+`_FILE` twin both is refused at start, and an admin-panel save never
+writes a secret from the environment back into `config.ini`.
+
+### Email
+
+`[email] smtp_enable_tls = true` sends mail over implicit TLS, with the
+server's certificate verified, as port 465 expects; with
+`smtp_port = 465` and neither it nor `smtp_enable_start_tls` set,
+implicit TLS is used. Setting both `smtp_enable_tls` and
+`smtp_enable_start_tls` is refused at start.
 
 ### Gopher
 
 WriteFreely's Gopher server listens on `[server] gopher_port`, never on a
 private instance. The port must be 1024 or above, since the image holds no
-capability to bind a lower one, and neither 8080 nor 8081. Publish it on
-Gopher's own port with `-p 70:7070` for `gopher_port = 7070`.
+capability to bind a lower one, and neither 8080 nor 8081. Every link in
+its menus carries `[server] gopher_advertised_port`, which is
+`gopher_port` unless set. To serve Gopher on its own port, 70, listen
+above 1024, publish that port as 70 with `-p 70:7070`, and advertise 70:
+
+```ini
+[server]
+gopher_port = 7070
+gopher_advertised_port = 70
+```
+
+A Gopher port that cannot be bound stops the start, naming the port,
+rather than leaving the web serving alone. Private and password-protected
+blogs are neither listed nor served over Gopher. Each connection has 10 s
+to send its selector and 120 s for the whole exchange, and at most 64 are
+served at once. With Gopher on, the health probe checks it too.
 
 ### Reverse proxy and TLS
 
@@ -178,6 +270,49 @@ plain HTTP. `[app] host` is the URL the proxy serves, and WriteFreely
 builds every link and every federated identity from it, so it must be
 right before the blog federates.
 
+**List the proxy in `[server] trusted_proxies`**, as IP addresses or CIDR
+prefixes, such as the container network's. The fork also takes `unix`,
+for a proxy that connects over a Unix socket, which has no effect here:
+the image listens on TCP 8080, never on a socket. WriteFreely takes a
+request from a listed proxy to come from the client its `X-Forwarded-For`
+names. Left unset, every visitor seems to come from the proxy, and so
+shares one login limit:
+after 10 failed logins from one client address in 15 minutes, that
+address's logins are refused for the rest of the window.
+
+**Federation.** Every ActivityPub inbox request must carry a valid HTTP
+signature, or it is refused. The signature is checked against
+`[app] host`, but **the proxy must pass the original `Host` header**:
+WriteFreely serves its instance actor and host-meta by it, and signs
+every fetch it makes as that actor, the key lookups behind the inbox's
+check included. With `Host` rewritten, servers that require signed
+fetches, such as GoToSocial, or Mastodon with authorized fetch, cannot
+verify the blog's fetches and refuse them, so the blog refuses their
+deliveries for want of their keys, and lookups and mentions of their
+users fail. Caddy and Traefik pass it by default, while nginx needs
+`proxy_set_header Host $host;` and Apache `ProxyPreserveHost On` to pass it
+through. `[server] inbox_max_bytes` caps an inbox request's body, at
+1048576 bytes (1 MiB) unless set, and a larger one is answered 413.
+
+**Forms and the session cookie.** Every write made with the login cookie
+carries a CSRF token, which WriteFreely's own pages send, and a write
+without one is refused: a client of your own that writes with the session
+cookie must send the token too. A page left open across an upgrade needs
+a reload before its next save. Clients that authenticate with an API
+token, in the `Authorization` header, are unaffected.
+
+### Accounts
+
+- **Password reset by email is refused for admins**: WriteFreely sends
+  no reset email for an admin's account. Reset an admin's password with
+  `user reset-pass`, below.
+- `[app] disable_password_auth = true` refuses every password login, the
+  admin's included.
+- `[app] open_registration = true` lets anyone create an account, even on
+  a single-user instance.
+- `[app] default_visibility` is read once for each blog, when it is
+  created: changing it later leaves existing blogs as they are.
+
 ### The operator's commands
 
 `divbast-writefreely user` manages users through the running container's
@@ -185,15 +320,23 @@ right before the blog federates.
 ones in force:
 
 ```bash
-podman exec writefreely divbast-writefreely user create grace:a-long-password
+podman exec -it writefreely divbast-writefreely user create grace
+printf '%s\n' "$password" | podman exec -i writefreely divbast-writefreely user create grace
 podman exec -it writefreely divbast-writefreely user reset-pass grace
 podman exec -it writefreely divbast-writefreely user delete grace
 ```
 
-`user create --admin` creates the admin, while there is none. `reset-pass`
-and `delete` ask at the terminal, as WriteFreely's own commands do, so
-they need `-it`. Before the first start there is nothing to manage, and
-`user` says to start the server first.
+`user create` asks for the new user's password at the terminal, masked;
+without a terminal, it reads one line of stdin instead, as the second
+command does with `-i`. The password is never an argument, where `ps`
+and the shell's history would show it, so the
+`user create <name>:<password>` form of earlier images is refused, as a
+wrong command line. `user create --admin` creates the admin, while there
+is none, and `user create` without it needs the admin to exist; either
+is refused before the password is asked for. `reset-pass` and `delete`
+ask at the terminal, as WriteFreely's own commands do, so they need
+`-it`. Before the first start there is nothing to manage, and `user`
+says to start the server first.
 
 ### Upgrades and backups
 
@@ -205,8 +348,14 @@ rather than `:latest`, and back up before you move it.
 
 The database, the key files and the trial's `config.ini` are one unit,
 and the keys cannot be made again: without them, sessions end and
-encrypted data is lost. To back up, stop the container, copy everything
-in `/data`, and start it again:
+encrypted data is lost. **Restore `/data/keys` with the database**: a
+database with users beside a missing key file is refused at start,
+naming the files, rather than given new keys. There is no flag to
+override it: with `/data/keys` lost and no backup, the only way on is to
+recreate each missing file yourself, as 32 random bytes owned by uid
+65532 at mode 0600, which ends every session and, for `email.aes256`,
+loses the email addresses stored for users and subscribers. To back up,
+stop the container, copy everything in `/data`, and start it again:
 
 ```bash
 podman stop writefreely
@@ -231,7 +380,7 @@ A Podman user passes it explicitly, with `--health-cmd` as in
 
 | | |
 |---|---|
-| `/usr/local/bin/divbast-writefreely health` | The in-container probe `HEALTHCHECK` runs. Asserts `/healthz` is 200 **and** `GET /login` on 8080 is 200, which holds on public, private, single- and multi-user instances alike. Prints nothing when healthy; otherwise one line, `<check>: <reason>`, for each half that failed, and exits 1 |
+| `/usr/local/bin/divbast-writefreely health` | The in-container probe `HEALTHCHECK` runs. Asserts `/healthz` is 200 **and** `GET /login` on 8080 is 200, which holds on public, private, single- and multi-user instances alike, **and**, when `config.ini` sets `gopher_port` on an instance that is not private, that Gopher answers its root selector with a whole menu, ending in its lone `.` line. Each check has 4 s, one after another, which the `HEALTHCHECK`'s 15 s timeout clears. Prints nothing when healthy; otherwise one line, `<check>: <reason>`, for each check that failed, `healthz`, `app` or `gopher`, and exits 1 |
 | `http://127.0.0.1:8081/healthz` | 200 with no body, or 503 with one `<check>: <reason>` line per failure: `database`, which must answer a ping, `schema`, which must be at the image's migration, and `keys`, every key file readable |
 
 Port 8081 serves nothing else and is meant to stay unpublished. On 8080,
@@ -244,10 +393,12 @@ pass. Compose's `healthcheck.test` wants the array with a leading `CMD`:
 
     test: ["CMD", "/usr/local/bin/divbast-writefreely", "health"]
 
-A Kubernetes `exec` probe takes the argv alone:
+A Kubernetes `exec` probe takes the argv alone, and needs a timeout that
+clears the probe's 12 s, since Kubernetes' default is 1 s:
 
     exec:
       command: ["/usr/local/bin/divbast-writefreely", "health"]
+    timeoutSeconds: 15
 
 The engine records why a check failed:
 
@@ -256,9 +407,11 @@ The engine records why a check failed:
 ## Dependency updates
 
 Every input the Containerfile names is pinned: the Docker Hardened
-Images, `golang`, `node` and `static`, by digest, WriteFreely by version,
-by its release tag and by its tarball's sha256, `lessc` and its clean-css
-plugin by `css/package-lock.json`, and every Go module by `app/go.sum`.
+Images, `golang`, `node` and `static`, by digest, WriteFreely's release by
+version, by its tag and by its tarball's sha256, the build of divbast's
+fork by `WRITEFREELY_FORK_VERSION` and `app/go.mod`'s replace, `lessc`
+and its clean-css plugin by `css/package-lock.json`, and every Go module
+by `app/go.sum`.
 
 A pin only moves through a pull request, and
 [Renovate](https://docs.renovatebot.com/) opens those. It runs every
@@ -270,10 +423,12 @@ are divbast/renovate-config's shared presets, and `renovate.json` adds
 WriteFreely's managers and groups. The pull requests Renovate opens here
 are:
 
-- A WriteFreely release arrives as one pull request that moves the version,
-  the tag and the tarball's sha256 in the Containerfile, and `app/go.mod`
-  and `app/go.sum`, together: the build fails unless they name the same
-  release.
+- A build of divbast's fork arrives as one `writefreely-fork` pull
+  request that moves `WRITEFREELY_FORK_VERSION` in the Containerfile and
+  `app/go.mod`'s replace, with `app/go.sum`, together: the build fails
+  unless they name the same build. Upstream WriteFreely releases do not
+  arrive here while the image is on the fork; they reach it through the
+  fork.
 - The other Go modules' minor and patch releases arrive grouped in one pull
   request, which tidies `app/go.mod`; a major arrives on its own, unless it
   moves a module only WriteFreely imports to a new path, which waits for
@@ -286,7 +441,7 @@ are:
   workflow's pin of it together.
 
 Renovate merges its own pull requests once every check on one has passed,
-majors and WriteFreely releases included, while the repository variable
+majors and fork builds included, while the repository variable
 `WRITEFREELY_AUTOMERGE` is `enabled`. Two kinds first wait for someone to
 approve them on the Dependency Dashboard: a new major version of
 divbast/ci, and a raise of a `go.mod`'s `go` line. Any other value of the
@@ -308,9 +463,9 @@ an older commit.
 
 A publish pushes each architecture, merges them into an index under
 `:<version>-staging`, attests it and verifies the attestation, and only then
-moves `:<version>` and `:latest`, before checking both as an anonymous client
-pulls them. If the attestation or its verification fails, `:<version>` and
-`:latest` stay where they were.
+moves `:<version>`, the fork build's tag and `:latest`, before checking each
+as an anonymous client pulls them. If the attestation or its verification
+fails, all three stay where they were.
 
 A daily stall check, `.github/workflows/stall.yml`, which calls divbast/ci's
 shared one, fails, and GitHub emails you, when a Renovate pull request has
@@ -335,8 +490,9 @@ newer:
 `--repo` and `--source-ref` say the image was built from this repository's
 `main` branch, and `--signer-workflow` that divbast/ci's publish workflow,
 which this repository's `build` workflow calls, signed it. Each
-attestation is on the index that `:<version>` and `:latest` name, so the
-per-architecture tags, which are not for use, verify with none.
+attestation is on the index that `:<version>`, the fork build's tag and
+`:latest` name, so the per-architecture tags, which are not for use, verify
+with none.
 
 If gh reports that its token was denied, for an image anyone may pull, it
 is sending a registry login from Docker's configuration, which GHCR
