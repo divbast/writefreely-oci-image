@@ -40,7 +40,7 @@ concurrency:
 jobs:
   check:
     name: check
-    uses: divbast/ci/.github/workflows/app-check.yml@8c5c550b0b8643085468702286bfc05438adb24b # v4.4.0
+    uses: divbast/ci/.github/workflows/app-check.yml@250c886366a84e1e8f1bae01fefa83c5e8d312a5 # v4.6.0
     with:
       # The DHI login, without which dhi.io answers nothing: the lint and
       # the build log in with it to read a Containerfile's Docker Hardened
@@ -84,7 +84,7 @@ jobs:
     if: >-
       github.ref == 'refs/heads/main'
       && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
-    uses: divbast/ci/.github/workflows/app-publish.yml@8c5c550b0b8643085468702286bfc05438adb24b # v4.4.0
+    uses: divbast/ci/.github/workflows/app-publish.yml@250c886366a84e1e8f1bae01fefa83c5e8d312a5 # v4.6.0
     with:
       image: ghcr.io/divbast/writefreely
       # The image is tagged with WriteFreely's release, from version-arg,
