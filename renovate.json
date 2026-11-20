@@ -59,6 +59,12 @@
       "allowedVersions": "<2.0.0"
     },
     {
+      "description": "dhi.io/static, the runtime, names its tags by date, as 20250419-debian13, and docker versioning reads the date as the major version, so a newer dated tag is a major increment in the thousands. Renovate's default maxMajorIncrement of 500 would skip it without a word, and the runtime's CA certificates and time zones would stay on the old tag once Docker stops rebuilding it. 0 lifts the limit for this image alone, so a new dated tag on the same line, -debian13, arrives as a pull request like any other update.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["dhi.io/static"],
+      "maxMajorIncrement": 0
+    },
+    {
       "description": "A WriteFreely release in one PR: the version and the tarball's tag and sha256 in the Containerfile, and app/go.mod and go.sum, since the build fails unless they name the same release. It merges once every check passes, like every other update here, and majors are no exception: the acceptance suite, not the size of the bump, holds a release back.",
       "matchDepNames": ["writefreely/writefreely", "github.com/writefreely/writefreely"],
       "groupName": "writefreely",

@@ -58,7 +58,8 @@ ci-checkout:
     git -C .ci fetch -q --depth 1 https://github.com/divbast/ci "${sha}"
     git -C .ci checkout -q FETCH_HEAD && rm -rf .ci/bin
 
-# Every lint gate. Needs a running Docker daemon, for docker build --check
+# Every lint gate. Needs a running Docker daemon, for docker build --check,
+# logged in to dhi.io for the Containerfile's images
 lint:
     {{ just_executable() }} ci-fresh actions-check workflow-audit actionlint shell-lint go-lint go-test app-go reuse-lint app-lint
 

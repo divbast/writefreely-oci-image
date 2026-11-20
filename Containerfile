@@ -11,16 +11,22 @@
 ARG WRITEFREELY_VERSION=0.17.3
 ARG WRITEFREELY_TAG=v0.17.3
 ARG WRITEFREELY_TARBALL_SHA256=207d1e4b7f8629c6b45c1da00b37ada910e28f1331ecce60dd82cb2ec78cf8b1
-# The newest stable Go, by digest, with the gcc WriteFreely's CGO SQLite
-# needs. Only the binary and upstream's trees leave its stage.
-ARG GO_IMAGE=golang:1.27.4-trixie@sha256:f18c3d73a184fb0582828510722e723b63a93f7188d11dd223d9be6f6880e65d
-# Node's LTS, by digest, for compiling WriteFreely's LESS. Only the CSS
-# leaves its stage.
-ARG NODE_IMAGE=node:26-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc
-# The runtime: static-debian13, since the binary is static, with nothing in
-# it but CA certificates, time zones and /etc/passwd. CI verifies its
-# signature by the distroless project before anything is built.
-ARG RUNTIME_IMAGE=gcr.io/distroless/static-debian13:nonroot@sha256:aafe993665bf6200db38a02c11a9351e782a84b6a45e7f33b6695638c88e3931
+# Every image below is a Docker Hardened Image on Debian 13, pinned by
+# digest, and CI verifies Docker's signature on each before anything is
+# built.
+#
+# The newest stable Go, in Docker Hardened Images' -dev variant, which has
+# the gcc and static glibc WriteFreely's CGO SQLite links against. Only the
+# binary and upstream's trees leave its stage.
+ARG GO_IMAGE=dhi.io/golang:1.27.4-debian13-dev@sha256:d88889bc28c955e70a0c182dc1ade69dd238af272f429aedd1dd6570010e7634
+# Node's LTS, in the -dev variant, for compiling WriteFreely's LESS and
+# fetching the editor's bundle. Only the CSS and the bundle leave its
+# stages.
+ARG NODE_IMAGE=dhi.io/node:26.13.1-debian13-dev@sha256:01fb968fd1a4c448008e44db003dcdbc682fee47b964c317388e64118f103d0a
+# The runtime: Docker Hardened Images' static, since the binary is static,
+# with nothing in it but CA certificates, time zones and the nonroot user
+# 65532: no shell and no package manager.
+ARG RUNTIME_IMAGE=dhi.io/static:20250419-debian13@sha256:4749130e822c145dbdf9ca11ec0cc2f694b5fe687fd74268a2b62160e6726f39
 
 # divbast's binary, with WriteFreely linked in as a library from the module
 # app/go.mod pins, and upstream's templates, pages, static files and LESS
@@ -45,7 +51,7 @@ RUN go mod download \
     && mkdir -p /out/upstream /out/data \
     && cp -R "${dir}/templates" "${dir}/pages" "${dir}/static" "${dir}/less" /out/upstream/
 COPY app/ ./
-# Static, so the distroless static base serves: CGO for SQLite, linked
+# Static, so the static runtime serves: CGO for SQLite, linked
 # with -static, and netgo and osusergo for the resolver and user lookups
 # that would otherwise reach for glibc's NSS at run time
 RUN CGO_ENABLED=1 go build -trimpath -tags sqlite,netgo,osusergo \
@@ -70,28 +76,49 @@ RUN set -eu; \
 # The editor's bundle, from the release tarball, checked against its pinned
 # sha256: its webpack 4 build needs Node's legacy OpenSSL provider and
 # forks fetched over git+ssh, so it is not built here. The bundle is
-# JavaScript, so the amd64 tarball's serves every architecture. Three
+# JavaScript, so the amd64 tarball's serves every architecture. Neither
+# -dev image has curl or gzip, so Node fetches the tarball, with three
 # retries, 10s, 30s and 90s apart, so one dropped connection does not cost
-# the daily slot.
-FROM ${GO_IMAGE} AS prose
+# the daily slot; and Node's zlib unpacks it, once its sha256 has matched,
+# for tar to read.
+FROM ${NODE_IMAGE} AS prose
 ARG WRITEFREELY_VERSION
 ARG WRITEFREELY_TAG
 ARG WRITEFREELY_TARBALL_SHA256
 SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
-RUN retry() { \
-        for delay in 10 30 90; do "$@" && return 0; sleep "${delay}"; done; \
-        "$@"; \
-    } \
-    && retry curl -fsSL -o /tmp/writefreely.tar.gz \
+RUN node --input-type=module -e ' \
+        import { writeFile } from "node:fs/promises"; \
+        import { setTimeout as sleep } from "node:timers/promises"; \
+        const [url, out] = process.argv.slice(1); \
+        const delays = [10, 30, 90]; \
+        for (let attempt = 0; ; attempt++) { \
+            try { \
+                const res = await fetch(url); \
+                if (!res.ok) throw new Error("HTTP " + res.status); \
+                await writeFile(out, new Uint8Array(await res.arrayBuffer())); \
+                break; \
+            } catch (err) { \
+                if (attempt === delays.length) throw err; \
+                console.error("fetch " + url + ": " + err.message + "; again in " + delays[attempt] + "s"); \
+                await sleep(delays[attempt] * 1000); \
+            } \
+        }' \
         "https://github.com/writefreely/writefreely/releases/download/${WRITEFREELY_TAG}/writefreely_${WRITEFREELY_VERSION}_linux_amd64.tar.gz" \
+        /tmp/writefreely.tar.gz \
     && echo "${WRITEFREELY_TARBALL_SHA256}  /tmp/writefreely.tar.gz" | sha256sum -c - \
-    && bundle=$(tar -tzf /tmp/writefreely.tar.gz | grep -E '(^|/)static/js/prose\.bundle\.js$') \
+    && node --input-type=module -e ' \
+        import { createReadStream, createWriteStream } from "node:fs"; \
+        import { pipeline } from "node:stream/promises"; \
+        import { createGunzip } from "node:zlib"; \
+        await pipeline(createReadStream(process.argv[1]), createGunzip(), createWriteStream(process.argv[2]));' \
+        /tmp/writefreely.tar.gz /tmp/writefreely.tar \
+    && bundle=$(tar -tf /tmp/writefreely.tar | grep -E '(^|/)static/js/prose\.bundle\.js$') \
     && if [ "$(printf '%s\n' "${bundle}" | wc -l)" -ne 1 ]; then \
         echo "the tarball holds no one prose.bundle.js: '${bundle}'" >&2; \
         exit 1; \
     fi \
     && mkdir -p /out \
-    && tar -xzf /tmp/writefreely.tar.gz -O "${bundle}" >/out/prose.bundle.js \
+    && tar -xf /tmp/writefreely.tar -O "${bundle}" >/out/prose.bundle.js \
     && test -s /out/prose.bundle.js
 
 FROM ${RUNTIME_IMAGE}

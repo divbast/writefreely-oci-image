@@ -12,17 +12,20 @@ Published as `ghcr.io/divbast/writefreely`.
 ## Base
 
 The image is one static Go binary, `/usr/local/bin/divbast-writefreely`,
-on [distroless](https://github.com/GoogleContainerTools/distroless)'s
-`static-debian13`, which holds nothing else but CA certificates, time
-zones and the `nonroot` user. The binary is divbast's own `main` with
-WriteFreely linked in as a library, from the WriteFreely release
-`app/go.mod` pins, so no upstream file is patched. Beside it are
+on Docker Hardened Images'
+[`static`](https://hub.docker.com/hardened-images/catalog) for Debian 13,
+which holds nothing else but CA certificates, time zones and the
+`nonroot` user: no shell and no package manager. The binary is divbast's
+own `main` with WriteFreely linked in as a library, from the WriteFreely
+release `app/go.mod` pins, so no upstream file is patched. Beside it are
 upstream's templates, pages and static files from that same release; its
 stylesheets, compiled from its LESS by a pinned `lessc`; and its editor's
 bundle, `prose.bundle.js`, taken from the release's tarball and checked
-against a pinned sha256. Every image the build uses is pinned by digest,
-and CI builds nothing until it has checked that the distroless project
-signed the runtime's digest.
+against a pinned sha256. Every stage of the build is also a Docker
+Hardened Image: the binary is built on DHI's `golang` `-dev`, and the
+stylesheets and the editor's bundle on its `node` `-dev`. Every image the
+build uses is pinned by digest, and CI builds nothing until it has
+verified Docker's signature on each.
 
 ## Container Features
 
@@ -252,10 +255,10 @@ The engine records why a check failed:
 
 ## Dependency updates
 
-Every input the Containerfile names is pinned: the `golang`, `node` and
-distroless images by digest, WriteFreely by version, by its release tag
-and by its tarball's sha256, `lessc` and its clean-css plugin by
-`css/package-lock.json`, and every Go module by `app/go.sum`.
+Every input the Containerfile names is pinned: the Docker Hardened
+Images, `golang`, `node` and `static`, by digest, WriteFreely by version,
+by its release tag and by its tarball's sha256, `lessc` and its clean-css
+plugin by `css/package-lock.json`, and every Go module by `app/go.sum`.
 
 A pin only moves through a pull request, and
 [Renovate](https://docs.renovatebot.com/) opens those. It runs every
@@ -275,10 +278,10 @@ are:
   request, which tidies `app/go.mod`; a major arrives on its own, unless it
   moves a module only WriteFreely imports to a new path, which waits for
   a WriteFreely release that adopts it.
-- A new Go or Node image, or a new distroless digest, arrives as a pull
-  request that moves its pin, and CI verifies the distroless signature
-  before it builds. `lessc` and its plugin move by pull requests of their
-  own.
+- A new Go, Node or `static` image, or a new digest of one, arrives as a
+  pull request that moves its pin, and CI verifies Docker's signature on
+  it before it builds. `lessc` and its plugin move by pull requests of
+  their own.
 - A release of divbast/ci arrives as one pull request that moves every
   workflow's pin of it together.
 
@@ -346,13 +349,19 @@ divbast/ci out into `.ci/` at the commit the workflows pin and installs
 the toolchain, and `just ci` runs every gate, the image build included.
 
 - `just build` builds the image locally, without verifying the images it
-  builds from; `just ci-tools && .ci/bin/divbast-verify-images` does, with
-  cosign from `mise.toml`.
+  builds from, and needs `docker login dhi.io`, since dhi.io serves its
+  images only to a Docker account; `just ci-tools &&
+  .ci/bin/divbast-verify-images` does verify them, with cosign from
+  `mise.toml`, and reads that login from `DHI_USERNAME` and `DHI_TOKEN`.
 - `just test` builds, then runs the acceptance suite against the image,
-  under `ENGINE`, docker unless it says podman.
+  under `ENGINE`, docker unless it says podman. Under Docker it needs
+  `zstd` on `PATH`, since every layer of a Docker Hardened Image is zstd
+  and the suite reads the image's layers through it; no `mise.toml` entry
+  provides it. CI runners already have it, and a Mac gets it with `brew
+  install zstd`.
 - `just lint` runs every lint gate, `app-go` among them, which runs ci's Go
   gates and tests in `app/`, and needs a running Docker daemon, for
-  `docker build --check`.
+  `docker build --check`, logged in to dhi.io.
 - `just scan` reads the published image with
   [skopeo](https://github.com/containers/skopeo), which must be on `PATH`.
 
