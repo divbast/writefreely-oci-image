@@ -179,13 +179,10 @@ func publish(ctx context.Context, out *probekit.Output, args []string) error {
 	if err != nil {
 		return err
 	}
-	token, err := apiLogin(ctx, base, user, pass)
-	loggedIn := "logging in as " + user + " through the API gives an access token"
-	if err != nil {
-		out.Record(false, loggedIn, "an access token", err.Error())
+	token, ok := recordLogin(ctx, out, base, user, pass)
+	if !ok {
 		return nil
 	}
-	out.Record(true, loggedIn, "an access token", "an access token")
 
 	posted, err := json.Marshal(map[string]string{"body": string(text)})
 	if err != nil {
@@ -213,6 +210,47 @@ func publish(ctx context.Context, out *probekit.Output, args []string) error {
 	}
 	out.Record(post.Data.Slug != "", what, "a slug", post.Data.Slug)
 	return nil
+}
+
+// privateVisibility is a private blog's visibility in WriteFreely's
+// collection API, whose JSON names the field "public".
+const privateVisibility = 2
+
+// blogPrivate logs user in through WriteFreely's API, and makes the blog
+// alias private with the access token, as a JSON update: the collection
+// API takes no other form without a session.
+func blogPrivate(ctx context.Context, out *probekit.Output, args []string) error {
+	base, user, pass, alias := strings.TrimSuffix(args[0], "/"), args[1], args[2], args[3]
+	token, ok := recordLogin(ctx, out, base, user, pass)
+	if !ok {
+		return nil
+	}
+	update, err := json.Marshal(map[string]int{"public": privateVisibility})
+	if err != nil {
+		return err
+	}
+	header := http.Header{"Content-Type": {"application/json"}, "Authorization": {"Token " + token}}
+	status, answer, err := send(ctx, http.MethodPost, base+"/api/collections/"+alias, header, update)
+	what := "making " + alias + " private through the API answers 200"
+	if err != nil {
+		out.Record(false, what, "200", err.Error())
+		return nil
+	}
+	out.Record(status == http.StatusOK, what, "200", fmt.Sprintf("%d %s", status, clip(answer)))
+	return nil
+}
+
+// recordLogin logs user in through the API, records whether that gave an
+// access token, and returns the token once it did.
+func recordLogin(ctx context.Context, out *probekit.Output, base, user, pass string) (token string, ok bool) {
+	token, err := apiLogin(ctx, base, user, pass)
+	what := "logging in as " + user + " through the API gives an access token"
+	if err != nil {
+		out.Record(false, what, "an access token", err.Error())
+		return "", false
+	}
+	out.Record(true, what, "an access token", "an access token")
+	return token, true
 }
 
 // apiLogin logs user in through POST /api/auth/login and returns the

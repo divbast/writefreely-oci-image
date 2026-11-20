@@ -13,10 +13,11 @@
 //	probe inbox-post <inbox-url> <mode> <expect-status>
 //	probe inbox-wait <type> <seconds> <blog-actor-url>
 //	probe actor-key <blog-actor-url>
-//	probe mail-wait <seconds> <to>
+//	probe mail-wait <seconds> <to> <user> <pass>
 //	probe gopher <host:port> <selector> <expect-file>
 //	probe get <url> <expect-status>
 //	probe publish <base> <user> <pass> <alias> <body-file>
+//	probe blog-private <base> <user> <pass> <alias>
 //	probe remove <path>
 //
 // Each prints its records as probekit's package comment gives them, and
@@ -55,16 +56,17 @@ const (
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	code := probekit.Main(ctx, map[string]probekit.Command{
-		"lab-serve":  {Args: []string{"dir"}, Run: labServe},
-		"follow":     {Args: []string{"inbox-url", "blog-actor-url"}, Run: follow},
-		"inbox-post": {Args: []string{"inbox-url", "mode", "expect-status"}, Run: inboxPost},
-		"inbox-wait": {Args: []string{"type", "seconds", "blog-actor-url"}, Run: inboxWait},
-		"actor-key":  {Args: []string{"blog-actor-url"}, Run: actorKey},
-		"mail-wait":  {Args: []string{"seconds", "to"}, Run: mailWait},
-		"gopher":     {Args: []string{"host:port", "selector", "expect-file"}, Run: gopher},
-		"get":        {Args: []string{"url", "expect-status"}, Run: get},
-		"publish":    {Args: []string{"base", "user", "pass", "alias", "body-file"}, Run: publish},
-		"remove":     {Args: []string{"path"}, Run: remove},
+		"lab-serve":    {Args: []string{"dir"}, Run: labServe},
+		"follow":       {Args: []string{"inbox-url", "blog-actor-url"}, Run: follow},
+		"inbox-post":   {Args: []string{"inbox-url", "mode", "expect-status"}, Run: inboxPost},
+		"inbox-wait":   {Args: []string{"type", "seconds", "blog-actor-url"}, Run: inboxWait},
+		"actor-key":    {Args: []string{"blog-actor-url"}, Run: actorKey},
+		"mail-wait":    {Args: []string{"seconds", "to", "user", "pass"}, Run: mailWait},
+		"gopher":       {Args: []string{"host:port", "selector", "expect-file"}, Run: gopher},
+		"get":          {Args: []string{"url", "expect-status"}, Run: get},
+		"publish":      {Args: []string{"base", "user", "pass", "alias", "body-file"}, Run: publish},
+		"blog-private": {Args: []string{"base", "user", "pass", "alias"}, Run: blogPrivate},
+		"remove":       {Args: []string{"path"}, Run: remove},
 	}, os.Args[1:], os.Stdout, os.Stderr)
 	stop()
 	os.Exit(code)

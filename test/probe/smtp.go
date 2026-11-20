@@ -229,9 +229,10 @@ func mailPath(arg, prefix string) (string, bool) {
 }
 
 // mailWait waits up to seconds for a message to to in the relay's
-// journal, and records that it came, and that it came over TLS.
+// journal, and records that it came, that it came over TLS, and that its
+// sender logged in with exactly user and pass: the relay takes any.
 func mailWait(ctx context.Context, out *probekit.Output, args []string) error {
-	to := args[1]
+	to, user, pass := args[1], args[2], args[3]
 	within, err := parseSeconds(args[0])
 	if err != nil {
 		return err
@@ -246,5 +247,7 @@ func mailWait(ctx context.Context, out *probekit.Output, args []string) error {
 	}
 	out.Record(true, arrives, "a message", fmt.Sprintf("from %s, %d bytes, AUTH PLAIN as %q", msg.From, len(msg.Data), msg.AuthUser))
 	out.Record(strings.HasPrefix(msg.TLS, "TLS"), "the message to "+to+" came over TLS", "TLS", msg.TLS)
+	out.Record(msg.AuthUser == user && msg.AuthPass == pass, "the message to "+to+" logged in as "+user+" with the password given",
+		fmt.Sprintf("%q with %q", user, pass), fmt.Sprintf("%q with %q", msg.AuthUser, msg.AuthPass))
 	return nil
 }

@@ -4,7 +4,10 @@
 package acceptance
 
 import (
+	"maps"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/divbast/ci/harness"
 )
@@ -84,4 +87,64 @@ func TestRefusals(t *testing.T) {
 			}
 		})
 	}
+}
+
+// firstStart is a first start of image, with the admin ada and env, on a
+// fresh volume, under a read-only multi-user config.ini, with the secret
+// file holding secret.
+func firstStart(t *testing.T, e harness.Engine, image string, env map[string]string, secret string) *harness.RunSpec {
+	t.Helper()
+	runEnv := map[string]string{adminUser: "ada"}
+	maps.Copy(runEnv, env)
+	return &harness.RunSpec{
+		Image:   image,
+		Confine: harness.Contract(tmpfsSize),
+		Network: "none",
+		Env:     runEnv,
+		Mounts:  []harness.Mount{dataVolume(t, e), configMount(t, configuredINI, false), secretMount(t, secret)},
+	}
+}
+
+// TestRefusesTwoAdminPasswordSources gives the first admin's password both
+// in WRITEFREELY_ADMIN_PASSWORD and in the secret file: the start is
+// refused, naming both, rather than one taken over the other.
+func TestRefusesTwoAdminPasswordSources(t *testing.T) {
+	t.Parallel()
+	e, image := underTest(t)
+	spec := firstStart(t, e, image, map[string]string{adminPassword: cliAdminPassword}, cliAdminPassword)
+	harness.Refuses(t, e, spec, 1, "two password sources", adminPassword+" and "+secretsDir+"/"+secretFile)
+}
+
+// TestRefusesLongAdminPassword gives the first admin a 73-byte password,
+// one past bcrypt's limit, in the secret file: the start is refused,
+// naming the limit, before any table of the schema is made, which would
+// leave a database with no admin.
+func TestRefusesLongAdminPassword(t *testing.T) {
+	t.Parallel()
+	e, image := underTest(t)
+	c, err := e.Start(t.Context(), t, firstStart(t, e, image, nil, strings.Repeat("p", 73)))
+	if err != nil {
+		t.Fatalf("starting %s: %v", image, err)
+	}
+	if exitsOne(t, c, "a 73-byte password", harness.ServeWithin, "at most 72") {
+		logLacks(t, c, "a 73-byte password is refused before the schema is made", "Creating table")
+	}
+}
+
+// exitsOne checks that c stops within the time given, with exit status
+// 1, and that its log holds needle, each check named for what: what makes
+// it stop. It reports whether c stopped at all, its log saying why when it
+// did not.
+func exitsOne(t *testing.T, c *harness.Container, what string, within time.Duration, needle string) bool {
+	t.Helper()
+	ctx := t.Context()
+	checks := harness.NewChecks(t)
+	code, err := c.WaitExit(ctx, within)
+	if err != nil {
+		checks.True(what+": the container stops within "+within.String(), false, harness.WithLog(ctx, c, err).Error())
+		return false
+	}
+	harness.Equal(checks, what+": the container exits with status 1", 1, code)
+	harness.LogContains(t, c, what+": the log says '"+needle+"'", needle)
+	return true
 }
