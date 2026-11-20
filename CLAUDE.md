@@ -6,7 +6,9 @@
 The divbast image of WriteFreely, `ghcr.io/divbast/writefreely`: one
 static Go binary, `divbast-writefreely`, that links WriteFreely as a
 library and runs it at zero Linux capabilities, with no new privileges, on
-a read-only root filesystem as a non-root user. It was made from
+a read-only root filesystem as a non-root user. It runs on Docker Hardened
+Images' `static` for Debian 13, and every stage of its build is a Docker
+Hardened Image too. It was made from
 `oci-image-template` by its entry in `divbast/infra`, which also holds its
 rulesets and Renovate wiring.
 
@@ -171,8 +173,9 @@ naming what to change.
 
 - `just setup` — fetch divbast/ci into `.ci/` at the commit the workflows
   pin, then install the pinned toolchain
-- `just build` — build the image locally, without verifying the images it
-  builds from; `just ci-tools && .ci/bin/divbast-verify-images` does
+- `just build` — build the image locally, after `docker login dhi.io`,
+  without verifying the images it builds from; `just ci-tools &&
+  .ci/bin/divbast-verify-images` does
 - `just acceptance` — the acceptance suite against the image `just build`
   wrote, under `ENGINE`, through `divbast-testcount`, which fails a run
   unless a test passed and none failed or skipped.
@@ -197,6 +200,22 @@ naming what to change.
 - **The CSS toolchain** is `css/package.json` and its lockfile, which pin
   `less` and `less-plugin-clean-css`; the build's `css` stage runs
   `npm ci` from them. JSON files carry `.license` sidecars
+- **Every image the Containerfile builds from is a Docker Hardened Image**,
+  pinned as `<name>:<tag>@sha256:<digest>`: the runtime `dhi.io/static`,
+  whose os-release says `ID="debian"`, so the scan stays on Trivy; the
+  `go` stage's `dhi.io/golang` `-dev`, which has the gcc and static glibc
+  the CGO SQLite build links against; and the `css` and `prose` stages'
+  `dhi.io/node` `-dev`. Neither `-dev` image has curl or gzip, so the
+  `prose` stage fetches the tarball with Node's `fetch` and unpacks it with
+  Node's zlib. Never add a stage from another publisher: before
+  `app-check.yml` builds anything, `divbast-verify-images` verifies
+  Docker's signature on each, with cosign from `mise.toml`
+- **dhi.io serves nothing without a login.** A local `just build` or
+  `just lint` needs `docker login dhi.io`; `divbast-verify-images` reads
+  the login from `DHI_USERNAME` and `DHI_TOKEN`, which `build.yml` and
+  `renovate.yml` pass to ci from the repository's settings. Under Docker
+  the acceptance suite needs `zstd` on `PATH`, since every layer of a
+  Docker Hardened Image is zstd
 
 ## Code quality
 

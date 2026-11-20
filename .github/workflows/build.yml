@@ -41,6 +41,14 @@ jobs:
   check:
     name: check
     uses: divbast/ci/.github/workflows/app-check.yml@ac91b2e405db7c31cb267e6998ec71aceac4f29a # v4.2.0
+    with:
+      # The DHI login, without which dhi.io answers nothing: the lint and
+      # the build log in with it to read a Containerfile's Docker Hardened
+      # Images. An app whose divbast/infra entry has no dhi = true reads
+      # both empty, and ci skips the login.
+      dhi-username: ${{ vars.DHI_USERNAME }}
+    secrets:
+      DHI_TOKEN: ${{ secrets.DHI_TOKEN }}
     permissions:
       contents: read
       attestations: read # verify the attestations of the images the Containerfile builds from
