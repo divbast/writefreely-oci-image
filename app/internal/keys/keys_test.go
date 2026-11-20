@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/writefreely/writefreely/key"
@@ -80,6 +81,32 @@ func TestEnsure(t *testing.T) {
 		if same := bytes.Equal(b, first[name]); same == (name == gone) {
 			t.Errorf("%s: rewritten %t, want rewritten only for %s", name, !same, gone)
 		}
+	}
+}
+
+func TestMissing(t *testing.T) {
+	t.Parallel()
+	dir := filepath.Join(t.TempDir(), "keys")
+	if got, err := keys.Missing(dir); err != nil || !slices.Equal(got, keys.Names) {
+		t.Errorf("Missing(no dir) = %q, %v; want every name", got, err)
+	}
+	if err := keys.Ensure(dir); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := keys.Missing(dir); err != nil || len(got) != 0 {
+		t.Errorf("Missing(after Ensure) = %q, %v; want none", got, err)
+	}
+	for _, name := range []string{keys.Names[3], keys.Names[0]} {
+		if err := os.Remove(filepath.Join(dir, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := []string{keys.Names[0], keys.Names[3]}
+	if got, err := keys.Missing(dir); err != nil || !slices.Equal(got, want) {
+		t.Errorf("Missing(two removed) = %q, %v; want %q, in Names' order", got, err, want)
+	}
+	if entries, err := os.ReadDir(dir); err != nil || len(entries) != len(keys.Names)-2 {
+		t.Errorf("Missing wrote to %s: %d entries, %v; want %d", dir, len(entries), err, len(keys.Names)-2)
 	}
 }
 

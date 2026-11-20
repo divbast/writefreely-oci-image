@@ -69,11 +69,13 @@ func versionLine(fork string) string {
 
 func main() {
 	o := bootstrap.Options{
-		Layout:    conf.Image,
-		Mounted:   conf.MountedPath,
-		Secret:    conf.SecretPath,
-		AdminUser: os.Getenv(conf.AdminUserEnv),
-		Out:       os.Stdout,
+		Layout:       conf.Image,
+		Mounted:      conf.MountedPath,
+		Secret:       conf.SecretPath,
+		Password:     os.Getenv(conf.AdminPasswordEnv),
+		PasswordFile: os.Getenv(conf.AdminPasswordFileEnv),
+		AdminUser:    os.Getenv(conf.AdminUserEnv),
+		Out:          os.Stdout,
 	}
 	os.Exit(run(os.Args[1:], &o, os.Stderr))
 }
