@@ -4,10 +4,12 @@
 package acceptance
 
 import (
+	"html"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -132,10 +134,32 @@ func trialPassword(t *testing.T, s *harness.Serving) string {
 	return password
 }
 
-// webLogin logs user in through the login form, as a browser does, and
-// returns a client holding the session's cookie. WriteFreely answers a
-// login with a 302 to the user's next page, and a failed one with a 307
-// back to /login.
+// The two places a page carries its CSRF token: the hidden field of a form,
+// and the meta tag in the head of every page.
+var (
+	csrfField = regexp.MustCompile(`name="gorilla\.csrf\.Token" value="([^"]+)"`)
+	csrfMeta  = regexp.MustCompile(`<meta name="csrf-token" content="([^"]+)"`)
+)
+
+// csrfToken GETs path with client, which keeps the token's cookie in its
+// jar, and returns the token the page carries, matched by where: csrfField
+// or csrfMeta. A write must send it back, as a browser does.
+func csrfToken(t *testing.T, s *harness.Serving, client *http.Client, path string, where *regexp.Regexp) string {
+	t.Helper()
+	resp, err := s.Do(t.Context(), client, http.MethodGet, path, nil, nil)
+	harness.Answers(t, "GET "+path+" answers 200", http.StatusOK, resp, err)
+	m := where.FindSubmatch(resp.Body)
+	if m == nil {
+		t.Fatalf("GET %s carries no CSRF token matching %s", path, where)
+	}
+	// The page escapes the token for HTML, as it does a "+".
+	return html.UnescapeString(string(m[1]))
+}
+
+// webLogin logs user in through the login form, as a browser does, with
+// the CSRF token the form carries, and returns a client holding the
+// session's cookie. WriteFreely answers a login with a 302 to the user's
+// next page, and a failed one with a 307 back to /login.
 func webLogin(t *testing.T, s *harness.Serving, user, pass string) *http.Client {
 	t.Helper()
 	jar, err := cookiejar.New(nil)
@@ -147,7 +171,8 @@ func webLogin(t *testing.T, s *harness.Serving, user, pass string) *http.Client 
 		Timeout:       30 * time.Second,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
-	form := url.Values{"alias": {user}, "pass": {pass}}.Encode()
+	token := csrfToken(t, s, client, "/login", csrfField)
+	form := url.Values{"alias": {user}, "pass": {pass}, "gorilla.csrf.Token": {token}}.Encode()
 	resp, err := s.Do(t.Context(), client, http.MethodPost, "/auth/login",
 		http.Header{"Content-Type": {"application/x-www-form-urlencoded"}}, []byte(form))
 	harness.Answers(t, "logging in as "+user+" redirects onwards", http.StatusFound, resp, err)

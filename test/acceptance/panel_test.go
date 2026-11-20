@@ -35,8 +35,12 @@ var panelForm = url.Values{
 // WriteFreely sent it: the settings page, with the save's result in cm.
 func savePanel(t *testing.T, s *harness.Serving, client *http.Client) string {
 	t.Helper()
+	token := csrfToken(t, s, client, "/admin/settings", csrfMeta)
 	resp, err := s.Do(t.Context(), client, http.MethodPost, "/admin/update/config",
-		http.Header{"Content-Type": {"application/x-www-form-urlencoded"}}, []byte(panelForm))
+		http.Header{
+			"Content-Type": {"application/x-www-form-urlencoded"},
+			"X-Csrf-Token": {token},
+		}, []byte(panelForm))
 	harness.Answers(t, "the settings form answers 302", http.StatusFound, resp, err)
 	return resp.Header.Get("Location")
 }

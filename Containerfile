@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # SPDX-FileCopyrightText: 2026 Aryan Ameri <github@aryan.ameri.coffee>
 
-# WriteFreely's release, which divbast's fork builds on, with app/go.mod's
+# WriteFreely's release, after which divbast's fork branches (the fork is
+# upstream's development branch after it, plus fixes), with app/go.mod's
 # require of github.com/writefreely/writefreely. The version tags the image:
 # app-publish.yml reads it from this line, by the name build.yml gives as
 # version-arg. The tag and the sha256 name the release's amd64 tarball,
@@ -16,7 +17,7 @@
 # name build.yml gives as extra-tag-arg. Renovate moves it with the replace
 # in one PR.
 ARG WRITEFREELY_VERSION=0.17.3
-ARG WRITEFREELY_FORK_VERSION=0.17.3-divbast.7
+ARG WRITEFREELY_FORK_VERSION=0.17.3-divbast.9
 ARG WRITEFREELY_TAG=v0.17.3
 ARG WRITEFREELY_TARBALL_SHA256=207d1e4b7f8629c6b45c1da00b37ada910e28f1331ecce60dd82cb2ec78cf8b1
 # Every image below is a Docker Hardened Image on Debian 13, pinned by
