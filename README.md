@@ -13,7 +13,7 @@ Published as `ghcr.io/divbast/writefreely`.
 
 The image is one static Go binary, `/usr/local/bin/divbast-writefreely`,
 on Docker Hardened Images'
-[`static`](https://hub.docker.com/hardened-images/catalog) for Debian 13,
+[`static`](https://hub.docker.com/hardened-images/catalog/dhi/static) for Debian 13,
 which holds nothing else but CA certificates, time zones and the
 `nonroot` user: no shell and no package manager. The binary is divbast's
 own `main` with WriteFreely linked in as a library. It builds from
