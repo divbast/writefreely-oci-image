@@ -249,11 +249,11 @@ naming what to change.
   whose os-release says `ID="debian"`, so the scan stays on Trivy; the
   `go` stage's `dhi.io/golang` `-dev`, which has the gcc and static glibc
   the CGO SQLite build links against; and the `css` and `prose` stages'
-  `dhi.io/node` `-dev`. Neither `-dev` image has curl or gzip, so the
-  `prose` stage fetches the tarball with Node's `fetch` and unpacks it with
-  Node's zlib. Never add a stage from another publisher: before
-  `app-check.yml` builds anything, `divbast-verify-images` verifies
-  Docker's signature on each, with cosign from `mise.toml`
+  `dhi.io/node` `-dev`, where the `prose` stage builds the editor's bundle
+  from the fork's `prose/` source. Never add a stage from another
+  publisher: before `app-check.yml` builds anything,
+  `divbast-verify-images` verifies Docker's signature on each, with cosign
+  from `mise.toml`
 - **dhi.io serves nothing without a login.** A local `just build` or
   `just lint` needs `docker login dhi.io`; `divbast-verify-images` reads
   the login from `DHI_USERNAME` and `DHI_TOKEN`, which `build.yml` and

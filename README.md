@@ -25,12 +25,15 @@ image uses it through its exported API and its `Apper` seam, and builds
 from upstream WriteFreely again once a release has the fixes. Beside the
 binary are the fork's templates, pages and static files from that same
 build; its stylesheets, compiled from its LESS by a pinned `lessc`; and
-the editor's bundle, `prose.bundle.js`, taken from the WriteFreely 0.17.3
-release's tarball and checked against a pinned sha256. Every stage of the
-build is also a Docker Hardened Image: the binary is built on DHI's
-`golang` `-dev`, and the stylesheets and the editor's bundle on its
-`node` `-dev`. Every image the build uses is pinned by digest, and CI
-builds nothing until it has verified Docker's signature on each.
+the editor's bundle, `prose.bundle.js`, built in the image's `node`
+`-dev` stage from the fork's `prose/` source, with the packages its
+lockfile pins from the npm registry and no install script run. No part
+of the image comes from WriteFreely's own repository: the build fails if
+it fetches upstream's module. Every stage of the build is also a Docker
+Hardened Image: the binary is built on DHI's `golang` `-dev`, and the
+stylesheets and the editor's bundle on its `node` `-dev`. Every image the
+build uses is pinned by digest, and CI builds nothing until it has
+verified Docker's signature on each.
 
 ## Container Features
 
@@ -412,9 +415,11 @@ The engine records why a check failed:
 ## Dependency updates
 
 Every input the Containerfile names is pinned: the Docker Hardened
-Images, `golang`, `node` and `static`, by digest, WriteFreely's release by
-version, by its tag and by its tarball's sha256, the build of divbast's
-fork by `WRITEFREELY_FORK_VERSION` and `app/go.mod`'s replace, `lessc`
+Images, `golang`, `node` and `static`, by digest, the WriteFreely release
+the fork builds on by `WRITEFREELY_VERSION` and `app/go.mod`'s require,
+which move by hand when the fork moves to a new release, the build of
+divbast's fork by `WRITEFREELY_FORK_VERSION` and `app/go.mod`'s replace,
+the editor's packages by the fork's `prose/package-lock.json`, `lessc`
 and its clean-css plugin by `css/package-lock.json`, and every Go module
 by `app/go.sum`.
 

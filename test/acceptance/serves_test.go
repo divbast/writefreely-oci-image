@@ -24,15 +24,20 @@ const (
 	// proseMarker is a class the ProseMirror editor in prose.bundle.js
 	// gives the node it selects.
 	proseMarker = "ProseMirror-selectednode"
-	// proseAtLeast is a floor under the bundle's size: v0.17.3's is 424
-	// KiB, and a truncated or empty one is far below it.
+	// proseForkMarker is an entry only the fork's editor source has, as
+	// the minified bundle spells it: prose/markdownParser.js maps a single
+	// newline to a line break, so the editor keeps a post's line breaks
+	// when it saves.
+	proseForkMarker = `softbreak:{node:"hard_break"}`
+	// proseAtLeast is a floor under the bundle's size: the fork's build is
+	// 359 KiB, and a truncated or empty one is far below it.
 	proseAtLeast = 100 << 10
 )
 
 // TestServes checks the trial from a client outside the container: the
 // blog and the login page, the stylesheet compiled from upstream's LESS,
-// the editor's bundle from the release tarball, and /healthz only on the
-// health port.
+// the editor's bundle built from the fork's source, and /healthz only on
+// the health port.
 func TestServes(t *testing.T) {
 	t.Parallel()
 	e, image := underTest(t)
@@ -59,6 +64,7 @@ func TestServes(t *testing.T) {
 	if err == nil {
 		checks.True("prose.bundle.js is the whole bundle", len(resp.Body) >= proseAtLeast, strconv.Itoa(len(resp.Body))+" bytes")
 		harness.Contains(t, "prose.bundle.js is ProseMirror's editor", proseMarker, string(resp.Body))
+		harness.Contains(t, "prose.bundle.js is built from the fork's editor source", proseForkMarker, string(resp.Body))
 	}
 
 	harness.StatusIs(t, s, "GET /healthz on the app port answers 404", http.StatusNotFound, "/healthz")
