@@ -14,7 +14,7 @@
 # name build.yml gives as extra-tag-arg. Renovate moves it with the replace
 # in one PR.
 ARG WRITEFREELY_VERSION=0.17.3
-ARG WRITEFREELY_FORK_VERSION=0.17.3-divbast.21
+ARG WRITEFREELY_FORK_VERSION=0.17.3-divbast.23
 # Every image below is a Docker Hardened Image on Debian 13, pinned by
 # digest, and CI verifies Docker's signature on each before anything is
 # built.

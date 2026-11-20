@@ -12,7 +12,7 @@ go 1.27.4
 // The replace goes once an upstream release has the fixes. Renovate moves
 // the fork build here and the Containerfile's WRITEFREELY_FORK_VERSION in
 // one PR, and the build fails unless they match.
-replace github.com/writefreely/writefreely => github.com/aryonoco/writefreely v0.17.3-divbast.21
+replace github.com/writefreely/writefreely => github.com/aryonoco/writefreely v0.17.3-divbast.23
 
 require (
 	// config.Save's own serialiser, so the admin panel's saves write the
