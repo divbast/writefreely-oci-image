@@ -9,7 +9,7 @@
 //	divbast-writefreely serve
 //	divbast-writefreely health
 //	divbast-writefreely version
-//	divbast-writefreely user create [--admin] <name>:<password>
+//	divbast-writefreely user create [--admin] <name>
 //	divbast-writefreely user delete <name>
 //	divbast-writefreely user reset-pass <name>
 //
@@ -17,13 +17,18 @@
 // 8081, as PID 1, until SIGTERM or SIGINT. health is the HEALTHCHECK's
 // probe. version prints the build of WriteFreely it links: the fork build
 // the image's build names. user manages users through
-// the working config.ini, once serve has made it; delete and reset-pass
-// ask at the terminal, as upstream's do. Exit codes: 0 for success, 1 for
-// a refusal or a failure, 2 for a wrong command line.
+// the working config.ini, once serve has made it. create reads the new
+// user's password at the terminal, masked, or as one line of stdin when
+// stdin is not a terminal, and never from the command line, where ps and
+// the shell's history would show it; delete and reset-pass ask at the
+// terminal, as upstream's do. Exit codes: 0 for success, 1 for a refusal
+// or a failure, 2 for a wrong command line.
 package main
 
 import (
+	"bufio"
 	"context"
+	"database/sql"
 	"errors"
 	"flag"
 	"fmt"
@@ -37,6 +42,8 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/manifoldco/promptui"
+	"github.com/mattn/go-isatty"
 	"github.com/writefreely/writefreely"
 	"github.com/writefreely/writefreely/migrations"
 
@@ -48,7 +55,7 @@ import (
 
 const (
 	usage     = "usage: divbast-writefreely serve|health|version|user …"
-	userUsage = "usage: divbast-writefreely user create [--admin] <name>:<password> | delete <name> | reset-pass <name>"
+	userUsage = "usage: divbast-writefreely user create [--admin] <name> | delete <name> | reset-pass <name>"
 )
 
 // forkVersion is the build of divbast's fork of WriteFreely the binary
@@ -77,12 +84,12 @@ func main() {
 		AdminUser:    os.Getenv(conf.AdminUserEnv),
 		Out:          os.Stdout,
 	}
-	os.Exit(run(os.Args[1:], &o, os.Stderr))
+	os.Exit(run(os.Args[1:], &o, os.Stdin, os.Stderr))
 }
 
 // run dispatches one subcommand and returns the exit code. o.Out is
 // stdout.
-func run(args []string, o *bootstrap.Options, stderr io.Writer) int {
+func run(args []string, o *bootstrap.Options, stdin io.Reader, stderr io.Writer) int {
 	if len(args) == 0 {
 		return usageError(stderr, usage)
 	}
@@ -106,7 +113,7 @@ func run(args []string, o *bootstrap.Options, stderr io.Writer) int {
 		}
 		return 0
 	case "user":
-		return user(args[1:], o, stderr)
+		return user(ctx, args[1:], o, stdin, stderr)
 	default:
 		return usageError(stderr, usage)
 	}
@@ -149,7 +156,7 @@ func serve(ctx context.Context, o *bootstrap.Options, stderr io.Writer) int {
 // user runs one user subcommand against the working config.ini, which
 // must already exist: before the first serve, it would be made in the
 // wrong place, or with nothing to manage.
-func user(args []string, o *bootstrap.Options, stderr io.Writer) int {
+func user(ctx context.Context, args []string, o *bootstrap.Options, stdin io.Reader, stderr io.Writer) int {
 	if len(args) == 0 {
 		return usageError(stderr, userUsage)
 	}
@@ -163,12 +170,21 @@ func user(args []string, o *bootstrap.Options, stderr io.Writer) int {
 	var do func(*wfapp.Apper) error
 	switch args[0] {
 	case "create":
-		// Cut at the first colon, so a password may hold one
-		n, password, ok := strings.Cut(name, ":")
-		if !ok {
-			return usageError(stderr, userUsage)
+		// The <name>:<password> form of earlier images, refused rather
+		// than taken for a name: the password is never an argument
+		if strings.Contains(name, ":") {
+			return usageError(stderr, "divbast-writefreely: user create takes the name alone, and reads the password at the terminal or from stdin\n"+userUsage)
 		}
-		do = func(a *wfapp.Apper) error { return writefreely.CreateUser(a, n, password, *admin) }
+		do = func(a *wfapp.Apper) error {
+			if err := adminFirst(ctx, a, *admin); err != nil {
+				return err
+			}
+			password, err := readPassword(stdin)
+			if err != nil {
+				return err
+			}
+			return writefreely.CreateUser(a, name, password, *admin)
+		}
 	case "delete":
 		do = func(a *wfapp.Apper) error { return writefreely.DoDeleteAccount(a, name) }
 	case "reset-pass":
@@ -188,6 +204,56 @@ func user(args []string, o *bootstrap.Options, stderr io.Writer) int {
 		return fail(stderr, err)
 	}
 	return 0
+}
+
+// adminFirst refuses, before user create asks for the password, what
+// WriteFreely's CreateUser would refuse only after it, in words that name
+// this image's command line rather than upstream's: the admin is the first
+// user, so --admin needs there to be none, and a user without it needs one.
+func adminFirst(ctx context.Context, a *wfapp.Apper, admin bool) error {
+	app := a.App()
+	if err := writefreely.ConnectToDatabase(app); err != nil {
+		return fmt.Errorf("connecting to the database: %w", err)
+	}
+	var name string
+	err := app.DB().DB.QueryRowContext(ctx, "SELECT username FROM users WHERE id = 1").Scan(&name)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		err = nil
+		if !admin {
+			err = errors.New("there is no admin yet: create one first with user create --admin <name>")
+		}
+	case err != nil:
+		err = fmt.Errorf("looking for the admin: %w", err)
+	case admin:
+		err = fmt.Errorf("an admin already exists, %q: create other users with user create <name>, without --admin", name)
+	}
+	return errors.Join(err, app.DB().Close())
+}
+
+// readPassword reads user create's password: at the terminal, masked, as
+// upstream's reset-pass asks for one, or else one line of stdin, without
+// its line ending. An empty password is refused.
+func readPassword(stdin io.Reader) (string, error) {
+	var password string
+	if f, ok := stdin.(*os.File); ok && isatty.IsTerminal(f.Fd()) {
+		prompt := promptui.Prompt{Label: "Password", Mask: '*', Stdin: f}
+		p, err := prompt.Run()
+		if err != nil && !errors.Is(err, promptui.ErrEOF) {
+			return "", fmt.Errorf("reading the password: %w", err)
+		}
+		password = p
+	} else {
+		line, err := bufio.NewReader(stdin).ReadString('\n')
+		if err != nil && !errors.Is(err, io.EOF) {
+			return "", fmt.Errorf("reading the password: %w", err)
+		}
+		password = strings.TrimSuffix(strings.TrimSuffix(line, "\n"), "\r")
+	}
+	if password == "" {
+		return "", errors.New("no password given: type it at the terminal, or give it as one line on stdin")
+	}
+	return password, nil
 }
 
 // existing returns the working file if there is one yet.

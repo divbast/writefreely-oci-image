@@ -5,6 +5,7 @@ package acceptance
 
 import (
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/divbast/ci/harness"
@@ -19,8 +20,9 @@ const (
 
 // TestOperatorCLI checks what the README tells an operator: the admin the
 // secret names logs in with the bare password, though the secret's file
-// ends in a newline, and user create, run in the container, makes a user
-// who logs in, once.
+// ends in a newline; user create, run in the container, makes a user who
+// logs in with the password it read from stdin, once; and the
+// <name>:<password> form is refused.
 func TestOperatorCLI(t *testing.T) {
 	t.Parallel()
 	e, image := underTest(t)
@@ -31,10 +33,13 @@ func TestOperatorCLI(t *testing.T) {
 
 	webLogin(t, s, "ada", cliAdminPassword)
 
-	res, err := s.C.Exec(ctx, nil, binary, "user", "create", "grace:"+cliUserPassword)
+	res, err := s.C.Exec(ctx, strings.NewReader(cliUserPassword+"\n"), binary, "user", "create", "grace")
 	checks.True("user create grace exits 0", err == nil && res.Code == 0, string(res.Stderr))
 	webLogin(t, s, "grace", cliUserPassword)
 
-	res, err = s.C.Exec(ctx, nil, binary, "user", "create", "grace:x")
+	res, err = s.C.Exec(ctx, strings.NewReader("x\n"), binary, "user", "create", "grace")
 	checks.True("user create of a user who exists fails", err == nil && res.Code != 0, strconv.Itoa(res.Code)+" "+string(res.Stderr))
+
+	res, err = s.C.Exec(ctx, strings.NewReader("x\n"), binary, "user", "create", "hopper:"+cliUserPassword)
+	checks.True("user create of name:password is refused as a wrong command line", err == nil && res.Code == 2, strconv.Itoa(res.Code)+" "+string(res.Stderr))
 }

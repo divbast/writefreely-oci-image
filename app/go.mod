@@ -20,6 +20,12 @@ require (
 	github.com/go-ini/ini v1.67.0
 	// InitRoutes takes a *mux.Router
 	github.com/gorilla/mux v1.8.1
+	// user create asks for the password at the terminal, masked, through
+	// the same prompt WriteFreely's own user reset-pass uses
+	github.com/manifoldco/promptui v0.9.0
+	// Whether stdin is a terminal decides between that prompt and one
+	// line of stdin; WriteFreely already links it, through fatih/color
+	github.com/mattn/go-isatty v0.0.24
 	github.com/writefreely/writefreely v0.17.3
 )
 
@@ -53,9 +59,7 @@ require (
 	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/kylemcc/twitter-text-go v0.0.0-20180726194232-7f582f6736ec // indirect
 	github.com/mailgun/mailgun-go v2.0.0+incompatible // indirect
-	github.com/manifoldco/promptui v0.9.0 // indirect
 	github.com/mattn/go-colorable v0.1.16 // indirect
-	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/mattn/go-sqlite3 v1.14.53 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.27 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
