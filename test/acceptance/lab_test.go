@@ -151,8 +151,9 @@ func (ca *testCA) issue(ip string) (certPEM, keyPEM []byte, err error) {
 // as ca.pem, a certificate for labIP and its key as cert.pem and key.pem,
 // the lab actor's RSA key as actor.pem, and a random token as canary.txt.
 // Every file is readable by the container's user. It returns the
-// directory and the CA's certificate, as PEM.
-func labDir(t *testing.T) (dir string, caPEM []byte) {
+// directory. The blog trusts the same CA, which startBlog takes from
+// labCA.
+func labDir(t *testing.T) string {
 	t.Helper()
 	ca, err := labCA()
 	if err != nil {
@@ -170,20 +171,20 @@ func labDir(t *testing.T) (dir string, caPEM []byte) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir = hostDir(t, 0o755, map[string]string{
+	return hostDir(t, 0o755, map[string]string{
 		"ca.pem":     string(ca.pem),
 		"cert.pem":   string(certPEM),
 		"key.pem":    string(keyPEM),
 		"actor.pem":  string(pemBlock("PRIVATE KEY", actorDER)),
 		"canary.txt": strings.ToLower(rand.Text()),
 	}, 0o644)
-	return dir, ca.pem
 }
 
 // startLab runs the lab on network, from image with the probe as its
 // entrypoint, under the contract: lab-serve, with dir mounted read-only.
-// It waits until the lab's actor answers, and returns the lab's probe.
-func startLab(t *testing.T, e harness.Engine, image, network, dir string) *harness.Probe {
+// It waits until the lab's actor answers, and returns the lab's container,
+// whose log has a line for each request the lab answers, and its probe.
+func startLab(t *testing.T, e harness.Engine, image, network, dir string) (*harness.Container, *harness.Probe) {
 	t.Helper()
 	ctx := t.Context()
 	c, err := e.Start(ctx, t, &harness.RunSpec{
@@ -208,7 +209,7 @@ func startLab(t *testing.T, e harness.Engine, image, network, dir string) *harne
 	awaitRecords(t, c, p, "the lab's actor", "get", labActor, "any")
 	labs.Store(network, p)
 	t.Cleanup(func() { labs.Delete(network) })
-	return p
+	return c, p
 }
 
 // startBlog serves image at blogIP on network, under the contract, with
@@ -299,17 +300,21 @@ func awaitRecords(t *testing.T, c *harness.Container, p *harness.Probe, what, su
 }
 
 // TestLabServes starts the lab and the trial blog on the lab network,
-// which has no route out, and checks each answers from inside the lab:
-// the lab's actor over HTTPS, through the test CA, and the blog's login
-// page at its fixed address.
+// and checks each answers the other: from inside the lab, the lab's actor
+// over HTTPS, through the test CA, and the blog's login page at its fixed
+// address; from inside the blog, which trusts the test CA too, the lab's
+// actor. The core probe shows, from the lab, that the network has no
+// route out.
 func TestLabServes(t *testing.T) {
 	t.Parallel()
 	e, image := underTest(t)
 	network := labNetwork(t, e)
-	dir, _ := labDir(t)
-	lab := startLab(t, e, image, network, dir)
-	startBlog(t, e, image, network, "", nil)
+	dir := labDir(t)
+	_, lab := startLab(t, e, image, network, dir)
+	_, blog := startBlog(t, e, image, network, "", nil)
 
 	harness.RunAppRecords(t, lab, "get", labActor, "200")
 	harness.RunAppRecords(t, lab, "get", blogBase+"/login", "200")
+	harness.RunAppRecords(t, blog, "get", labActor, "200")
+	harness.RunRecords(t, lab, "probe-egress")
 }
