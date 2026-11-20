@@ -27,7 +27,7 @@ ARG WRITEFREELY_TARBALL_SHA256=207d1e4b7f8629c6b45c1da00b37ada910e28f1331ecce60d
 # The newest stable Go, in Docker Hardened Images' -dev variant, which has
 # the gcc and static glibc WriteFreely's CGO SQLite links against. Only the
 # binary and upstream's trees leave its stage.
-ARG GO_IMAGE=dhi.io/golang:1.27.4-debian13-dev@sha256:d88889bc28c955e70a0c182dc1ade69dd238af272f429aedd1dd6570010e7634
+ARG GO_IMAGE=dhi.io/golang:1.27.4-debian13-dev@sha256:2f58c6928a851f0b6059f1a63514828a788a748d88b218a1bc9ae23c3b540140
 # Node's LTS, in the -dev variant, for compiling WriteFreely's LESS and
 # fetching the editor's bundle. Only the CSS and the bundle leave its
 # stages.
