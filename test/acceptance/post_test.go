@@ -14,13 +14,12 @@ import (
 // postBody is what the post says, and what its page must show.
 const postBody = "posted by the acceptance suite"
 
-// TestLoginAndPost logs the trial's admin in through WriteFreely's API,
-// publishes a post to the blog, and finds it on the blog.
-func TestLoginAndPost(t *testing.T) {
-	t.Parallel()
-	e, image := underTest(t)
+// publishViaAPI logs the trial's admin in through WriteFreely's API and
+// publishes a post with the body to the blog. It returns the post's slug,
+// or "" after recording the failure when the login or the publish fails.
+func publishViaAPI(t *testing.T, s *harness.Serving, body string) string {
+	t.Helper()
 	ctx := t.Context()
-	s := serveWF(t, e, image, nil, dataVolume(t, e))
 	checks := harness.NewChecks(t)
 	jsonHeader := http.Header{"Content-Type": {"application/json"}}
 
@@ -37,10 +36,10 @@ func TestLoginAndPost(t *testing.T) {
 	}
 	if err != nil || json.Unmarshal(resp.Body, &login) != nil || login.Data.AccessToken == "" {
 		checks.True("the API login gives an access token", false, string(resp.Body))
-		return
+		return ""
 	}
 
-	post, err := json.Marshal(map[string]string{"title": "divbast check", "body": postBody})
+	post, err := json.Marshal(map[string]string{"title": "divbast check", "body": body})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,11 +54,24 @@ func TestLoginAndPost(t *testing.T) {
 	}
 	if err != nil || json.Unmarshal(resp.Body, &created) != nil || created.Data.Slug == "" {
 		checks.True("the post has a slug", false, string(resp.Body))
+		return ""
+	}
+	return created.Data.Slug
+}
+
+// TestLoginAndPost logs the trial's admin in through WriteFreely's API,
+// publishes a post to the blog, and finds it on the blog.
+func TestLoginAndPost(t *testing.T) {
+	t.Parallel()
+	e, image := underTest(t)
+	s := serveWF(t, e, image, nil, dataVolume(t, e))
+
+	slug := publishViaAPI(t, s, postBody)
+	if slug == "" {
 		return
 	}
-
-	resp, err = s.Get(ctx, "/"+created.Data.Slug, nil)
-	harness.Answers(t, "GET /"+created.Data.Slug+" answers 200", http.StatusOK, resp, err)
+	resp, err := s.Get(t.Context(), "/"+slug, nil)
+	harness.Answers(t, "GET /"+slug+" answers 200", http.StatusOK, resp, err)
 	if err == nil {
 		harness.Contains(t, "the post is on the blog", postBody, string(resp.Body))
 	}
