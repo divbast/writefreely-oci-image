@@ -14,7 +14,7 @@ go 1.27.4
 // WriteFreely's own repository. Renovate moves the fork build here and the
 // Containerfile's WRITEFREELY_FORK_VERSION in one PR, and the build fails
 // unless they match.
-replace github.com/writefreely/writefreely => github.com/aryonoco/writefreely v0.17.3-divbast.26
+replace github.com/writefreely/writefreely => github.com/aryonoco/writefreely v0.17.3-divbast.27
 
 require (
 	// config.Save's own serialiser, so the admin panel's saves write the
@@ -43,7 +43,6 @@ require (
 	github.com/captncraig/cors v0.0.0-20190703115713-e80254a89df1 // indirect
 	github.com/chzyer/readline v1.5.1 // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
-	github.com/embedas/go-embed v1.1.3 // indirect
 	github.com/fatih/color v1.19.0 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/go-sql-driver/mysql v1.10.2 // indirect
@@ -72,10 +71,8 @@ require (
 	github.com/nxadm/tail v1.4.11 // indirect
 	github.com/petermattis/goid v0.0.0-20261120131106-3f141f74aebc // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/rainycape/unidecode v0.0.0-20150907023854-cb7f23ec59be // indirect
 	github.com/rogpeppe/go-internal v1.16.0 // indirect
 	github.com/sasha-s/go-deadlock v0.3.9 // indirect
-	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
 	github.com/toorop/go-dkim v0.0.0-20250226130143-9025cce95817 // indirect
 	github.com/writeas/activity v0.1.2 // indirect
 	github.com/writeas/go-strip-markdown/v2 v2.1.1 // indirect
@@ -86,12 +83,11 @@ require (
 	github.com/writeas/import v0.2.1 // indirect
 	github.com/writeas/monday v1.3.0 // indirect
 	github.com/writeas/openssl-go v1.0.0 // indirect
-	github.com/writeas/saturday v1.7.2-0.20210702162556-fe428f9c0648 // indirect
-	github.com/writeas/slug v1.2.0 // indirect
 	github.com/writeas/web-core v1.8.0 // indirect
 	github.com/writefreely/go-gopher v0.0.0-20260201132918-6d40a5df699c // indirect
 	github.com/writefreely/go-nodeinfo v1.2.0 // indirect
 	github.com/xhit/go-simple-mail/v2 v2.17.0 // indirect
+	github.com/yuin/goldmark/v2 v2.1.16 // indirect
 	golang.org/x/crypto v0.59.0 // indirect
 	golang.org/x/mod v0.43.0 // indirect
 	golang.org/x/net v0.63.0 // indirect
