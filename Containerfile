@@ -34,7 +34,7 @@ ARG NODE_IMAGE=dhi.io/node:26.13.1-debian13-dev@sha256:1e91de4150a28147380747229
 # The runtime: Docker Hardened Images' static, since the binary is static,
 # with nothing in it but CA certificates, time zones and the nonroot user
 # 65532: no shell and no package manager.
-ARG RUNTIME_IMAGE=dhi.io/static:20250419-debian13@sha256:4749130e822c145dbdf9ca11ec0cc2f694b5fe687fd74268a2b62160e6726f39
+ARG RUNTIME_IMAGE=dhi.io/static:20250419-debian13@sha256:f3a87dc858c61b3f731ab2f86349ef10953b15918f167dbf9581543255364e32
 
 # divbast's binary, with WriteFreely linked in as a library from the module
 # app/go.mod pins, the fork's build its replace names, and the templates,
