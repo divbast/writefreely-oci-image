@@ -26,7 +26,7 @@ ARG WRITEFREELY_FORK_VERSION=0.17.3-divbast.27
 # the gcc and static glibc WriteFreely's CGO SQLite links against. Only the
 # binary and the fork's trees, the editor's source among them, leave its
 # stage.
-ARG GO_IMAGE=dhi.io/golang:1.27.4-debian13-dev@sha256:36a82d8f47f767eeaedee0a4d9d048c73e72144dd40f7956a4d7c76d3341bfad
+ARG GO_IMAGE=dhi.io/golang:1.27.4-debian13-dev@sha256:6abf5b6dea0a290cf7851c88effd403bd12acacaf4cee8b88a19de297eaba4ad
 # Node's LTS, in the -dev variant, for compiling WriteFreely's LESS and
 # building the editor's bundle. Only the CSS and the bundle leave its
 # stages.
