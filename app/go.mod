@@ -69,7 +69,7 @@ require (
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d // indirect
 	github.com/nxadm/tail v1.4.11 // indirect
-	github.com/petermattis/goid v0.0.0-20261120131106-3f141f74aebc // indirect
+	github.com/petermattis/goid v0.0.0-20261124144452-466dc414edf5 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rogpeppe/go-internal v1.16.0 // indirect
 	github.com/sasha-s/go-deadlock v0.3.9 // indirect
