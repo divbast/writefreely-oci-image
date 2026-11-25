@@ -30,7 +30,7 @@ ARG GO_IMAGE=dhi.io/golang:1.27.4-debian13-dev@sha256:730e4ca865af1b931d6b1ea8be
 # Node's LTS, in the -dev variant, for compiling WriteFreely's LESS and
 # building the editor's bundle. Only the CSS and the bundle leave its
 # stages.
-ARG NODE_IMAGE=dhi.io/node:26.13.1-debian13-dev@sha256:dc9c579c8666127214312d953f456924bc1c57d4c0c367c40532fe6ef01d831b
+ARG NODE_IMAGE=dhi.io/node:26.13.1-debian13-dev@sha256:d4f8c755168bbea66fc667bf4bc0a8462dc57a29da3c04e8c93ebe0592e231b5
 # The runtime: Docker Hardened Images' static, since the binary is static,
 # with nothing in it but CA certificates, time zones and the nonroot user
 # 65532: no shell and no package manager.
