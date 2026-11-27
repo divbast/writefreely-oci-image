@@ -26,7 +26,7 @@ concurrency:
 jobs:
   stall:
     name: stall
-    uses: divbast/ci/.github/workflows/stall.yml@1d5fa7d401986beee704969aa1f41c763c304e9b # v4.33.0
+    uses: divbast/ci/.github/workflows/stall.yml@3f7c3d27a07a997d9bb90b912902b2869ea7989a # v4.36.0
     with:
       published: ghcr.io/divbast/writefreely:latest
     # Everything stall.yml's job asks for, slots or not: a called job that
